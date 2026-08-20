@@ -1,0 +1,288 @@
+{
+  "name": "ChatDENT appointment reminders",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ChatDENT reminders\n\nEvery 15 minutes: 24h and 2h WhatsApp alerts.\nIf the patient replies RESCHEDULE, the assistant flags the visit so staff can call.\nDoes not create calendar bookings.",
+        "height": 220,
+        "width": 320,
+        "color": 5
+      },
+      "id": "note-rem-1",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "sched-1",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://pocketbase:8090/api/leads/reminders?hours=24",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-rem-24",
+      "name": "Get 24h reminders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://pocketbase:8090/api/leads/reminders?hours=2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-rem-2",
+      "name": "Get 2h reminders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
+      },
+      "id": "code-split-24",
+      "name": "Split 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
+      },
+      "id": "code-split-2",
+      "name": "Split 2h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 12,
+        "unit": "seconds"
+      },
+      "id": "wait-rem",
+      "name": "Wait before reminder",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        320
+      ],
+      "webhookId": "wait-rem"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-rem",
+      "name": "Send reminder WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/mark-reminder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ appointmentId: $json.appointmentId, kind: $json.kind }) }}",
+        "options": {}
+      },
+      "id": "http-mark",
+      "name": "Mark reminder sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Get 24h reminders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get 2h reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get 24h reminders": {
+      "main": [
+        [
+          {
+            "node": "Split 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get 2h reminders": {
+      "main": [
+        [
+          {
+            "node": "Split 2h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split 24h": {
+      "main": [
+        [
+          {
+            "node": "Wait before reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split 2h": {
+      "main": [
+        [
+          {
+            "node": "Wait before reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before reminder": {
+      "main": [
+        [
+          {
+            "node": "Send reminder WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark reminder sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

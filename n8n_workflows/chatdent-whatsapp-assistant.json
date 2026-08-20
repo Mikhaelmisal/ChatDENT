@@ -1,0 +1,1042 @@
+{
+  "name": "ChatDENT WhatsApp assistant",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ChatDENT WhatsApp assistant (OpenRouter)\n\n1. OPENROUTER_API_KEY in D:\\ChatDENT\\.env and N8N_BLOCK_ENV_ACCESS_IN_NODE=false in docker-compose, then: docker compose up -d n8n --force-recreate\n2. Import this workflow. Keep **ChatDENT WhatsApp booking** inactive.\n3. Evolution webhook: `http://n8n:5678/webhook/chatdent-whatsapp` event messages.upsert instance `clinic_default`.\n4. Activate this workflow.\n\nCanned WhatsApp (welcome, confirm, reminder, birthday, review, group alerts, opt-out) comes from **WhatsApp templates** in ChatDENT. The AI only chats after the first welcome. It never books and never quotes fees.",
+        "height": 520,
+        "width": 420,
+        "color": 6
+      },
+      "id": "note-ai-1",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatdent-whatsapp",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-ai-1",
+      "name": "Evolution webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "chatdent-whatsapp"
+    },
+    {
+      "parameters": {
+        "jsCode": "const CONFIG = {\n  bookingToken: 'rlwqer5f50usxidldnhdzyg7',\n  pbBase: 'http://pocketbase:8090',\n  evoBase: 'http://evolution-api:8080',\n  evoKey: 'clinic_secret_key_123',\n  evoInstance: 'clinic_default'\n};\n\nfunction pickText(msg) {\n  if (!msg) return '';\n  if (typeof msg === 'string') return msg;\n  if (typeof msg.conversation === 'string') return msg.conversation;\n  if (msg.extendedTextMessage && msg.extendedTextMessage.text) return msg.extendedTextMessage.text;\n  if (msg.imageMessage && msg.imageMessage.caption) return msg.imageMessage.caption;\n  if (msg.videoMessage && msg.videoMessage.caption) return msg.videoMessage.caption;\n  if (msg.documentMessage && msg.documentMessage.caption) return msg.documentMessage.caption;\n  if (msg.ephemeralMessage && msg.ephemeralMessage.message) return pickText(msg.ephemeralMessage.message);\n  if (msg.viewOnceMessage && msg.viewOnceMessage.message) return pickText(msg.viewOnceMessage.message);\n  if (msg.viewOnceMessageV2 && msg.viewOnceMessageV2.message) return pickText(msg.viewOnceMessageV2.message);\n  if (msg.buttonsResponseMessage) {\n    return msg.buttonsResponseMessage.selectedDisplayText || msg.buttonsResponseMessage.selectedButtonId || '';\n  }\n  if (msg.listResponseMessage) {\n    const l = msg.listResponseMessage;\n    return l.title || (l.singleSelectReply && l.singleSelectReply.selectedRowId) || '';\n  }\n  return '';\n}\n\nfunction hasVoice(msg) {\n  if (!msg || typeof msg !== 'object') return false;\n  return !!(msg.audioMessage || msg.pttMessage || msg.ptt || msg.voiceMessage);\n}\n\nfunction unwrap(raw) {\n  if (!raw || typeof raw !== 'object') return {};\n  if (raw.body && (raw.body.data || raw.body.key || raw.body.message)) return unwrap(raw.body);\n  let inner = raw.data || raw;\n  if (Array.isArray(inner)) {\n    inner = inner.find(function (item) {\n      return item && item.key && item.key.fromMe !== true;\n    }) || inner[inner.length - 1] || {};\n  }\n  if (inner.data && (inner.key == null)) return unwrap(inner);\n  return inner;\n}\n\nfunction realJid(key, inner, raw) {\n  const k = key || {};\n  const candidates = [\n    k.remoteJidAlt,\n    k.senderPn,\n    k.participantAlt,\n    k.remoteJid,\n    inner.remoteJidAlt,\n    inner.senderPn,\n    inner.remoteJid,\n    raw.sender,\n    raw.senderPn\n  ];\n  let lidFallback = '';\n  for (let i = 0; i < candidates.length; i++) {\n    const v = String(candidates[i] || '');\n    if (!v) continue;\n    if (v.indexOf('@g.us') >= 0) return v;\n    if (v.indexOf('@lid') >= 0) {\n      if (!lidFallback) lidFallback = v;\n      continue;\n    }\n    if (v.indexOf('@s.whatsapp.net') >= 0 || v.indexOf('@c.us') >= 0) return v;\n    if (/^\\d{10,15}$/.test(v.replace(/\\D/g, '')) && v.indexOf('@') < 0) return v + '@s.whatsapp.net';\n  }\n  return lidFallback;\n}\n\nfunction isStopText(text) {\n  const t = String(text || '').toLowerCase().replace(/[^\\w\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (!t) return false;\n  return (\n    t === 'stop' ||\n    t === 'unsubscribe' ||\n    t === 'opt out' ||\n    t === 'optout' ||\n    t.indexOf('stop messages') >= 0 ||\n    t.indexOf('do not message') >= 0 ||\n    t.indexOf('dont message') >= 0 ||\n    t.indexOf(\"don't message\") >= 0 ||\n    t.indexOf('stop promotions') >= 0\n  );\n}\n\nconst raw = $input.first().json || {};\nconst inner = unwrap(raw);\nconst key = inner.key || {};\nconst msg = inner.message || inner;\nconst chatJid = String(key.remoteJid || inner.remoteJid || '');\nconst jid = realJid(key, inner, raw);\nconst fromMe = key.fromMe === true;\nconst isGroup =\n  chatJid.indexOf('@g.us') >= 0 ||\n  chatJid.indexOf('@broadcast') >= 0 ||\n  chatJid.indexOf('@newsletter') >= 0 ||\n  String(jid).indexOf('@g.us') >= 0;\nconst isStatus = chatJid.indexOf('status@broadcast') >= 0;\nconst phone = jid.replace(/@.*$/, '').replace(/\\D/g, '');\nconst name = String(inner.pushName || raw.pushName || '').trim();\nconst voice = hasVoice(msg);\nlet text = String(pickText(msg) || '').trim();\nif (!text && voice) text = '[voice note]';\nconst optOut = !fromMe && isStopText(text);\nlet skipReason = '';\nif (isGroup) skipReason = 'group';\nelse if (isStatus) skipReason = 'status';\nelse if (!phone) skipReason = 'noPhone';\nconst skip = skipReason !== '';\nconst staffReply = !skip && fromMe;\nconst choice = parseInt(text, 10);\nconst wantsBook = !skip && !fromMe && String(choice) === text && choice >= 1 && choice <= 12;\n\nreturn [{\n  json: Object.assign({}, CONFIG, {\n    skip: skip,\n    skipReason: skipReason,\n    staffReply: staffReply,\n    optOut: optOut,\n    voice: voice,\n    wantsBook: wantsBook,\n    slotIndex: wantsBook ? choice - 1 : -1,\n    phone: phone,\n    name: name,\n    text: text,\n    jid: jid\n  })\n}];\n"
+      },
+      "id": "code-parse-ai",
+      "name": "Parse inbound",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.skip }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-skip-ai",
+      "name": "Skip noise",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "noop-skip-ai",
+      "name": "Ignore",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.staffReply }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-staff",
+      "name": "Staff replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/ai-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: 'pause' }) }}",
+        "options": {}
+      },
+      "id": "http-pause",
+      "name": "Pause assistant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.name, phone: $json.phone, source: 'whatsapp', notes: $json.text, stage: 'contacted', optOut: $json.optOut }) }}",
+        "options": {}
+      },
+      "id": "http-upsert-ai",
+      "name": "Upsert lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inbound = $('Parse inbound').first().json || {};\nconst up = $input.first().json || {};\nconst groupJid =\n  up.staffGroupJid || '120363426681576301@g.us';\nconst optOut = inbound.optOut === true || up.optOut === true;\nconst shouldReply = up.shouldReply !== false && !optOut;\nconst sendWelcome = shouldReply && up.isNewLead === true && !!(up.welcomeText || '').trim();\nreturn [{\n  json: Object.assign({}, inbound, {\n    shouldReply: shouldReply,\n    sendWelcome: sendWelcome,\n    notifyGroup: up.notifyGroup === true,\n    staffGroupJid: groupJid,\n    groupText: up.groupText || '',\n    welcomeText: up.welcomeText || '',\n    optOutText: up.optOutText || '',\n    number: inbound.phone,\n    reply: up.groupText || '',\n    isReturningPatient: up.isReturningPatient === true,\n    isNewLead: up.isNewLead === true,\n    optOut: optOut\n  })\n}];\n"
+      },
+      "id": "code-after-up",
+      "name": "Prepare after upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.notifyGroup }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-group",
+      "name": "Notify staff group?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json || {};\nreturn [{\n  json: Object.assign({}, p, {\n    number: p.staffGroupJid || '120363426681576301@g.us',\n    reply: p.groupText || ''\n  })\n}];\n"
+      },
+      "id": "code-group-tgt",
+      "name": "Set group target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 4,
+        "unit": "seconds"
+      },
+      "id": "wait-group",
+      "name": "Wait before group",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        80
+      ],
+      "webhookId": "wait-group"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-group",
+      "name": "Send staff group alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.optOut }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-optout",
+      "name": "Opted out?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json || {};\nreturn [{\n  json: Object.assign({}, p, {\n    number: p.phone,\n    reply: p.optOutText || ''\n  })\n}];\n"
+      },
+      "id": "code-optout-tgt",
+      "name": "Set opt-out target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-optout",
+      "name": "Wait before opt-out",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        240
+      ],
+      "webhookId": "wait-optout"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-optout",
+      "name": "Send opt-out template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.sendWelcome }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-welcome",
+      "name": "Send welcome?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json || {};\nreturn [{\n  json: Object.assign({}, p, {\n    number: p.phone,\n    reply: p.welcomeText || ''\n  })\n}];\n"
+      },
+      "id": "code-welcome-tgt",
+      "name": "Set welcome target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 4,
+        "unit": "seconds"
+      },
+      "id": "wait-welcome",
+      "name": "Wait before welcome",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        360
+      ],
+      "webhookId": "wait-welcome"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-welcome",
+      "name": "Send welcome template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldReply }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-reply",
+      "name": "Reply now?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        560
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "noop-cool",
+      "name": "Cooldown skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-ai",
+      "name": "Wait before AI",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        480
+      ],
+      "webhookId": "wait-ai"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Parse inbound').item.json.pbBase + '/api/leads/ai-context?phone=' + $('Parse inbound').item.json.phone }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-ai-ctx",
+      "name": "Get AI context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Get AI context').first().json || {};\nconst inbound = $('Parse inbound').first().json || {};\nconst slots = (ctx.slots || []).slice(0, 8).map(function (s, i) {\n  return (i + 1) + '. ' + s.start;\n});\nconst maps = (ctx.evolution && ctx.evolution.googleMapsUrl) || ctx.googleMapsUrl || '';\nconst treatments = (ctx.campaign && ctx.campaign.treatments) || '';\nconst system =\n  'You are the WhatsApp assistant for a dental clinic named ' +\n  (ctx.clinicName || 'the clinic') +\n  '. Speak briefly and warmly in 1-3 short messages. Never book an appointment yourself. ' +\n  'Do not send welcome packs, appointment confirmations, reminders, birthday wishes, Google review requests, or staff-group alerts \u2014 those are sent only from saved clinic templates. You only chat: answer questions, collect name and concern, and say staff will call. ' +\n  'NEVER mention prices, fees, packages, discounts, EMI, or cost. If they ask how much something costs, say only a doctor can discuss fees in person or on a phone call. ' +\n  'You may name treatments from this list only, with no prices: ' + treatments + '. ' +\n  'If you do not yet have their real name, politely ask for it. ' +\n  'Ask what dental concern they have. ' +\n  'If the inbound text is [voice note], thank them and ask them to type the concern, or say staff will call. ' +\n  'If the person is interested or says yes, thank them and say the receptionist or doctor will call to confirm. ' +\n  'If they want to reschedule, say staff will call to pick a new time. ' +\n  'If they say they already left a Google review, thank them. ' +\n  'You may share the clinic Google Maps link if they ask where you are: ' + maps + '. ' +\n  'You may mention a clinic flyer only if campaign.sendFlyerWithChat is true. ' +\n  'Reply in the patient language. Return ONLY JSON with keys: ' +\n  'reply (string), attachFlyer (boolean), events (array of {type, appointmentId?, name?, interest?}). ' +\n  'type must be one of: interested, reschedule, review_done, profile.';\n\nconst user =\n  'Incoming WhatsApp from ' + inbound.phone +\n  ' name=' + (inbound.name || '') +\n  ' text=' + (inbound.text || '') +\n  '\\nLead: ' + JSON.stringify(ctx.lead || null) +\n  '\\nPatient: ' + JSON.stringify(ctx.patient || null) +\n  '\\nUpcoming appointments: ' + JSON.stringify(ctx.upcomingAppointments || []) +\n  '\\nFree slots (info only): ' + slots.join('\\n') +\n  '\\nGoogle review URL: ' + ((ctx.campaign && ctx.campaign.googleReviewUrl) || '') +\n  '\\nSend flyer allowed: ' + !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && ctx.flyer && ctx.flyer.url);\n\nreturn [{\n  json: {\n    evoBase: inbound.evoBase,\n    evoKey: inbound.evoKey,\n    evoInstance: inbound.evoInstance,\n    pbBase: inbound.pbBase,\n    bookingToken: inbound.bookingToken,\n    phone: inbound.phone,\n    name: inbound.name,\n    number: inbound.phone,\n    flyerUrl: ctx.flyer && ctx.flyer.url\n      ? (inbound.pbBase + ctx.flyer.url)\n      : ((ctx.campaign && ctx.campaign.marketingImageUrl) || ''),\n    sendFlyerAllowed: !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && (\n      (ctx.flyer && ctx.flyer.file) || (ctx.campaign && ctx.campaign.marketingImageUrl)\n    )),\n    googleMapsUrl: maps,\n    model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n    openRouterBody: {\n      model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: system },\n        { role: 'user', content: user }\n      ]\n    }\n  }\n}];\n"
+      },
+      "id": "code-ai-prompt",
+      "name": "Build AI prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "http://localhost:5678"
+            },
+            {
+              "name": "X-Title",
+              "value": "ChatDENT"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openRouterBody) }}",
+        "options": {}
+      },
+      "id": "http-openrouter",
+      "name": "OpenRouter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-send",
+      "name": "Wait before send",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        480
+      ],
+      "webhookId": "wait-send"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Build AI prompt').first().json || {};\nconst raw = $input.first().json || {};\nlet content = '';\nif (raw.choices && raw.choices[0] && raw.choices[0].message) {\n  content = raw.choices[0].message.content || '';\n}\nlet parsed = { reply: '', attachFlyer: false, events: [] };\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed.reply = content || 'Thank you. Our receptionist will help you shortly.';\n}\nconst events = parsed.events || [];\nif (parsed.markInterested) events.push({ type: 'interested' });\nif (parsed.reschedule) events.push({ type: 'reschedule' });\nif (parsed.reviewDone) events.push({ type: 'review_done' });\nevents.push({ type: 'assistant_replied' });\n\nreturn [{\n  json: {\n    evoBase: prev.evoBase,\n    evoKey: prev.evoKey,\n    evoInstance: prev.evoInstance,\n    phone: prev.phone,\n    name: prev.name,\n    number: prev.phone,\n    reply: String(parsed.reply || 'Thank you. Our team will call you to confirm.'),\n    attachFlyer: !!(parsed.attachFlyer && prev.sendFlyerAllowed && prev.flyerUrl),\n    flyerUrl: prev.flyerUrl,\n    events: events,\n    event0: events[0] || null,\n    event1: events[1] || null,\n    event2: events[2] || null\n  }\n}];\n"
+      },
+      "id": "code-ai-result",
+      "name": "Parse AI result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-ai",
+      "name": "Send WhatsApp reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.attachFlyer }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-flyer",
+      "name": "Attach flyer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendMedia/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, mediatype: 'image', mimetype: 'image/jpeg', caption: $json.mediaCaption || '', media: $json.flyerUrl }) }}",
+        "options": {}
+      },
+      "id": "http-evo-flyer",
+      "name": "Send flyer image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $input.first().json || {};\nconst events = prev.events || [];\nif (!events.length) return [];\nreturn events.map(function (ev) {\n  return {\n    json: {\n      phone: prev.phone,\n      name: prev.name,\n      type: ev.type,\n      appointmentId: ev.appointmentId || '',\n      name: ev.name || prev.name,\n      interest: ev.interest || ''\n    }\n  };\n});\n"
+      },
+      "id": "code-ai-events",
+      "name": "Split AI events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/ai-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, appointmentId: $json.appointmentId, interest: $json.interest, leadId: $json.leadId }) }}",
+        "options": {}
+      },
+      "id": "http-ai-event",
+      "name": "Record AI event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "Evolution webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse inbound": {
+      "main": [
+        [
+          {
+            "node": "Skip noise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip noise": {
+      "main": [
+        [
+          {
+            "node": "Ignore",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Staff replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Staff replied?": {
+      "main": [
+        [
+          {
+            "node": "Pause assistant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert lead": {
+      "main": [
+        [
+          {
+            "node": "Prepare after upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare after upsert": {
+      "main": [
+        [
+          {
+            "node": "Notify staff group?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Opted out?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify staff group?": {
+      "main": [
+        [
+          {
+            "node": "Set group target",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Set group target": {
+      "main": [
+        [
+          {
+            "node": "Wait before group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before group": {
+      "main": [
+        [
+          {
+            "node": "Send staff group alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Opted out?": {
+      "main": [
+        [
+          {
+            "node": "Set opt-out target",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send welcome?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set opt-out target": {
+      "main": [
+        [
+          {
+            "node": "Wait before opt-out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before opt-out": {
+      "main": [
+        [
+          {
+            "node": "Send opt-out template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send welcome?": {
+      "main": [
+        [
+          {
+            "node": "Set welcome target",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply now?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set welcome target": {
+      "main": [
+        [
+          {
+            "node": "Wait before welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before welcome": {
+      "main": [
+        [
+          {
+            "node": "Send welcome template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply now?": {
+      "main": [
+        [
+          {
+            "node": "Wait before AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cooldown skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before AI": {
+      "main": [
+        [
+          {
+            "node": "Get AI context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI context": {
+      "main": [
+        [
+          {
+            "node": "Build AI prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "Parse AI result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI result": {
+      "main": [
+        [
+          {
+            "node": "Wait before send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before send": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp reply": {
+      "main": [
+        [
+          {
+            "node": "Attach flyer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach flyer?": {
+      "main": [
+        [
+          {
+            "node": "Send flyer image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split AI events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send flyer image": {
+      "main": [
+        [
+          {
+            "node": "Split AI events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split AI events": {
+      "main": [
+        [
+          {
+            "node": "Record AI event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

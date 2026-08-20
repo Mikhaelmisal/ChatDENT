@@ -1,0 +1,41 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "chatdent-clinic",
+          "appId": "1:000000000000:android:chatdentplaceholder",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "chatdent-clinic",
+          "configurations": {
+            "android": "1:000000000000:android:chatdentplaceholder",
+            "ios": "1:000000000000:ios:chatdentplaceholder",
+            "macos": "1:000000000000:ios:chatdentplaceholder",
+            "web": "1:000000000000:web:chatdentplaceholder",
+            "windows": "1:000000000000:web:chatdentplaceholder"
+          }
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "chatdent-clinic",
+          "appId": "1:000000000000:ios:chatdentplaceholder",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "chatdent-clinic",
+          "appId": "1:000000000000:ios:chatdentplaceholder",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      }
+    }
+  }
+}

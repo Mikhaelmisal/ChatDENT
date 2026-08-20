@@ -1,0 +1,106 @@
+import 'package:chatdent/core/multi_stream_builder.dart';
+import 'package:chatdent/services/localization/locale.dart';
+import 'package:chatdent/features/stats/charts_controller.dart';
+import 'package:chatdent/features/settings/settings_stores.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+
+class ChartsRangeSelector extends StatelessWidget {
+  const ChartsRangeSelector({
+    super.key,
+    required Color color,
+    required TextStyle textStyle,
+    required List<IconData> icons,
+  })  : _color = color,
+        _textStyle = textStyle,
+        _icons = icons;
+
+  final Color _color;
+  final TextStyle _textStyle;
+  final List<IconData> _icons;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 0, left: 8, right: 8),
+      child: MStreamBuilder(
+          streams: [
+            chartsCtrl.start.stream,
+            chartsCtrl.end.stream,
+            chartsCtrl.interval.stream
+          ],
+          builder: (context, snapshot) {
+            final isPhone = MediaQuery.of(context).size.width < 600;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: () => chartsCtrl.rangePicker(context),
+                  icon: Row(
+                    children: [
+                      Transform.flip(
+                          flipX: true,
+                          child: Icon(
+                            WindowsIcons.calendar_reply,
+                            size: 20,
+                            color: _color,
+                          )),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Txt(txt("start"), style: _textStyle),
+                          Txt(DF.allNumbers(chartsCtrl.start()),
+                              style: _textStyle),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (!isPhone)
+                  IconButton(
+                    onPressed: chartsCtrl.toggleInterval,
+                    icon: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _icons[StatsInterval.values
+                                  .indexOf(chartsCtrl.interval())],
+                              size: 20,
+                              color: _color,
+                            ),
+                            const SizedBox(width: 5),
+                            Txt("${txt("periodicity")}: ${chartsCtrl.periods.length} ${txt(chartsCtrl.intervalString)}",
+                                style: _textStyle)
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                IconButton(
+                  onPressed: () => chartsCtrl.rangePicker(context),
+                  icon: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Txt(txt("end"), style: _textStyle),
+                          Txt(DF.allNumbers(chartsCtrl.end()),
+                              style: _textStyle),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(WindowsIcons.calendar_reply,
+                          size: 20, color: _color),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }),
+    );
+  }
+}

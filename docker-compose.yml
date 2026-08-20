@@ -1,0 +1,85 @@
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:0.23.0
+    container_name: pocketbase
+    restart: unless-stopped
+    ports:
+      - "8095:8090"
+    volumes:
+      - ./pb_data:/pb_data
+      - ./pb_hooks:/pb_hooks
+    environment:
+      - PB_PORT=8090
+
+  n8n:
+    image: docker.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      - EVOLUTION_API_URL=http://evolution-api:8080
+      - EVOLUTION_API_KEY=clinic_secret_key_123
+      - WHATSAPP_SESSION_ID=clinic_default
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+    depends_on:
+      - evolution-api
+
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: evolution_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=clinic_secret_key_123
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@postgres:5432/evolution?schema=public
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/1
+    depends_on:
+      - postgres
+      - redis
+
+  evolution-manager:
+    image: evoapicloud/evolution-manager:latest
+    container_name: evolution_manager
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_EVOLUTION_API_URL=http://localhost:8080
+    depends_on:
+      - evolution-api
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      if [ -f /etc/nginx/conf.d/nginx.conf ]; then
+        sed -i 's/ must-revalidate//g' /etc/nginx/conf.d/nginx.conf;
+      fi && nginx -g 'daemon off;'
+      "
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=evolution
+    volumes:
+      - ./evolution_db:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    container_name: evolution_redis
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+import 'package:chatdent/core/observable.dart';
+import 'package:chatdent/features/appointments/appointment_model.dart';
+import 'package:chatdent/features/appointments/appointments_store.dart';
+import 'package:chatdent/features/patients/patient_model.dart';
+
+class _DashboardController {
+  List<Appointment> get thisMonthAppointments =>
+      appointments.thisMonthAppointments;
+  List<Appointment> get todayAppointments =>
+      appointments.todayAppointments.where((a) => a.archived != true).toList();
+
+  final currentOpenTab = ObservableState(0);
+
+  double get paymentsToday {
+    double res = 0;
+    for (var appointment in todayAppointments) {
+      res += appointment.paid;
+    }
+    return res;
+  }
+
+  List<Patient> get newPatientsToday {
+    return todayAppointments
+        .where((x) => x.firstAppointmentForThisPatient && x.patient != null)
+        .map((x) => x.patient!)
+        .toList();
+  }
+}
+
+final dashboardCtrl = _DashboardController();

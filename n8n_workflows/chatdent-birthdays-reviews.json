@@ -1,0 +1,314 @@
+{
+  "name": "ChatDENT birthdays and reviews",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Birthdays + Google reviews\n\nDaily 09:00: birthday WhatsApp (once per year).\nEvery 6 hours: review request after a completed visit, max 3 times, ~2 days apart.\nMessages go only to that patient's number.",
+        "height": 280,
+        "width": 360,
+        "color": 4
+      },
+      "id": "note-out-1",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "sched-bday",
+      "name": "Daily 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "sched-rev",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://pocketbase:8090/api/leads/due-birthdays?days=0",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-bdays",
+      "name": "Get due birthdays",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://pocketbase:8090/api/leads/due-reviews",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-reviews",
+      "name": "Get due reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json || {};\nconst clinic = body.clinicName || 'the clinic';\nconst url = body.googleReviewUrl || '';\nconst tpl = body.template || '';\nconst people = body.people || [];\nif (!people.length) return [];\nconst isReview = people[0].reviewAskCount !== undefined;\nreturn people.map(function (p) {\n  const text = String(p.whatsappText || '').trim() || String(tpl)\n    .replace(/\\{name\\}/g, p.name || '')\n    .replace(/\\{clinic\\}/g, clinic)\n    .replace(/\\{reviewUrl\\}/g, url);\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      number: String(p.phone || '').replace(/\\D/g, ''),\n      reply: text,\n      phone: String(p.phone || '').replace(/\\D/g, ''),\n      name: p.name || '',\n      type: isReview ? 'review_asked' : 'birthday_sent'\n    }\n  };\n});\n"
+      },
+      "id": "code-split-bday",
+      "name": "Split birthdays",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json || {};\nconst clinic = body.clinicName || 'the clinic';\nconst url = body.googleReviewUrl || '';\nconst tpl = body.template || '';\nconst people = body.people || [];\nif (!people.length) return [];\nconst isReview = people[0].reviewAskCount !== undefined;\nreturn people.map(function (p) {\n  const text = String(p.whatsappText || '').trim() || String(tpl)\n    .replace(/\\{name\\}/g, p.name || '')\n    .replace(/\\{clinic\\}/g, clinic)\n    .replace(/\\{reviewUrl\\}/g, url);\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      number: String(p.phone || '').replace(/\\D/g, ''),\n      reply: text,\n      phone: String(p.phone || '').replace(/\\D/g, ''),\n      name: p.name || '',\n      type: isReview ? 'review_asked' : 'birthday_sent'\n    }\n  };\n});\n"
+      },
+      "id": "code-split-rev",
+      "name": "Split reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "wait-out",
+      "name": "Wait before outreach",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        340
+      ],
+      "webhookId": "wait-out"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-out",
+      "name": "Send outreach WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/ai-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type }) }}",
+        "options": {}
+      },
+      "id": "http-mark-out",
+      "name": "Mark outreach sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 9am": {
+      "main": [
+        [
+          {
+            "node": "Get due birthdays",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Get due reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get due birthdays": {
+      "main": [
+        [
+          {
+            "node": "Split birthdays",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get due reviews": {
+      "main": [
+        [
+          {
+            "node": "Split reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split birthdays": {
+      "main": [
+        [
+          {
+            "node": "Wait before outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split reviews": {
+      "main": [
+        [
+          {
+            "node": "Wait before outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before outreach": {
+      "main": [
+        [
+          {
+            "node": "Send outreach WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send outreach WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Mark outreach sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

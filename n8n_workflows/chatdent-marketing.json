@@ -1,0 +1,304 @@
+{
+  "name": "ChatDENT marketing blast",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Marketing blast\n\nEvery 5 minutes: one queued lead per filled marketing instance (1-4), rotating 1 \u2192 2 \u2192 3 \u2192 4. Waits 25s then sends.\nIf those fields are empty, uses the clinic instance.\nReplies still create a lead and post NEW/RETURNING to the staff group from the clinic number. Put the extra WhatsApp accounts in that group. Do not chat there.",
+        "height": 280,
+        "width": 380,
+        "color": 3
+      },
+      "id": "note-mkt-1",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "sched-mkt",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://pocketbase:8090/api/leads/due-marketing",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-mkt",
+      "name": "Get due marketing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json || {};\nconst people = body.people || [];\nif (!people.length) return [];\nconst evo = body.evolution || {};\nreturn people.map(function (p) {\n  return {\n    json: {\n      evoBase: evo.baseUrl || 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: p.evoInstance || evo.instance || 'clinic_default',\n      number: String(p.phone || '').replace(/\\D/g, ''),\n      reply: p.caption || '',\n      mediaCaption: p.caption || '',\n      flyerUrl: p.imageUrl || '',\n      phone: String(p.phone || '').replace(/\\D/g, ''),\n      name: p.name || '',\n      type: 'marketing_sent',\n      sendMedia: !!p.imageUrl,\n      leadId: p.id || ''\n    }\n  };\n});\n"
+      },
+      "id": "code-split-mkt",
+      "name": "Split marketing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 25,
+        "unit": "seconds"
+      },
+      "id": "wait-mkt",
+      "name": "Wait before blast",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        300
+      ],
+      "webhookId": "wait-mkt"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.sendMedia }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-mkt-img",
+      "name": "Has image?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendMedia/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, mediatype: 'image', mimetype: 'image/jpeg', caption: $json.mediaCaption || '', media: $json.flyerUrl }) }}",
+        "options": {}
+      },
+      "id": "http-evo-mkt",
+      "name": "Send marketing image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-mkt-text",
+      "name": "Send marketing text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pocketbase:8090/api/leads/ai-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Booking-Token",
+              "value": "rlwqer5f50usxidldnhdzyg7"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, leadId: $json.leadId }) }}",
+        "options": {}
+      },
+      "id": "http-mark-mkt",
+      "name": "Mark marketing sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Get due marketing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get due marketing": {
+      "main": [
+        [
+          {
+            "node": "Split marketing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split marketing": {
+      "main": [
+        [
+          {
+            "node": "Wait before blast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before blast": {
+      "main": [
+        [
+          {
+            "node": "Has image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has image?": {
+      "main": [
+        [
+          {
+            "node": "Send marketing image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send marketing text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send marketing image": {
+      "main": [
+        [
+          {
+            "node": "Mark marketing sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send marketing text": {
+      "main": [
+        [
+          {
+            "node": "Mark marketing sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

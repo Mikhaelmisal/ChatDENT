@@ -1,0 +1,506 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:chatdent/features/settings/settings_stores.dart';
+import 'package:chatdent/services/ai_services.dart';
+import 'package:chatdent/utils/ws_platform/ws_platform.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:record/record.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+enum TranscriptionState { idle, connecting, recording, stopping, error }
+
+class TranscriptionSession {
+  const TranscriptionSession({
+    required this.state,
+    this.transcript = '',
+    this.elapsedSeconds = 0,
+    this.error,
+  });
+
+  final TranscriptionState state;
+  final String transcript;
+  final int elapsedSeconds;
+  final Object? error;
+
+  TranscriptionSession copyWith({
+    TranscriptionState? state,
+    String? transcript,
+    int? elapsedSeconds,
+    Object? error,
+  }) =>
+      TranscriptionSession(
+        state: state ?? this.state,
+        transcript: transcript ?? this.transcript,
+        elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+        error: error ?? this.error,
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
+/// Real-time voice transcription via the WS Live API, proxied through
+/// the ChatDENT AI Worker at `/live-ws` (authenticated WebSocket).
+///
+///
+/// Usage:
+///   final svc = WSVoiceTranscriptionService(controller: _ctrl);
+///   await svc.startTranscription();
+///   await svc.stopTranscription();
+///   svc.dispose();
+///
+/// Wire format (sending = snake_case, receiving = camelCase):
+///   • Setup → { setup: { model, generation_config: { response_modalities }, … } }
+///   • Audio → { realtime_input: { audio: { data, mime_type } } }
+///   • Reply → { serverContent: { inputTranscription, outputTranscription, … } }
+class WSVoiceTranscriptionService extends AIService {
+  WSVoiceTranscriptionService({
+    required TextEditingController controller,
+    bool clearOnStart = true,
+    void Function(String transcript)? onDone,
+  })  : _controller = controller,
+        _clearOnStart = clearOnStart,
+        _onDone = onDone;
+
+  final TextEditingController _controller;
+  final bool _clearOnStart;
+  final void Function(String transcript)? _onDone;
+
+  // Stream that consumers subscribe to for live state updates.
+  final _streamCtrl = StreamController<TranscriptionSession>.broadcast();
+  Stream<TranscriptionSession> get stream => _streamCtrl.stream;
+
+  TranscriptionSession _session =
+      const TranscriptionSession(state: TranscriptionState.idle);
+  TranscriptionSession get session => _session;
+  bool get isActive =>
+      _session.state == TranscriptionState.connecting ||
+      _session.state == TranscriptionState.recording;
+
+  final _recorder = AudioRecorder();
+  WebSocketChannel? _ws;
+  StreamSubscription? _wsSub;
+  StreamSubscription<Uint8List>? _audioSub;
+  Completer<void>? _setupCompleter;
+  Timer? _maxTimer;
+  Timer? _tickTimer;
+  bool _disposed = false;
+  int _sessionId = 0;
+
+  // -------------------------------------------------------------------------
+  // Public
+  // -------------------------------------------------------------------------
+
+  Future<void> startTranscription() async {
+    if (_disposed) throw StateError('Service has been disposed.');
+    if (isActive) return;
+
+    // If a previous session is still in its grace period, cut it short
+    // and fully clean up before starting a new one.
+    if (_session.state == TranscriptionState.stopping) {
+      await _cleanup();
+    }
+    _sessionId++;
+
+    if (_clearOnStart) {
+      _controller.clear();
+    }
+    _emit(
+        state: TranscriptionState.connecting,
+        transcript: _clearOnStart ? '' : _controller.text);
+
+    try {
+      if (!await _recorder.hasPermission()) {
+        throw Exception('Microphone permission denied.');
+      }
+      await _openWebSocket();
+    } catch (e) {
+      await _cleanup();
+      _emit(state: TranscriptionState.error, error: e);
+      rethrow;
+    }
+  }
+
+  Future<void> stopTranscription() async {
+    if (!isActive) return;
+    final id = _sessionId;
+    _emit(state: TranscriptionState.stopping);
+
+    // Stop capturing audio immediately — no new chunks go out.
+    _maxTimer?.cancel();
+    _maxTimer = null;
+    _tickTimer?.cancel();
+    _tickTimer = null;
+    try {
+      if (await _recorder.isRecording()) await _recorder.stop();
+    } catch (_) {}
+    await _audioSub?.cancel();
+    _audioSub = null;
+
+    // Keep the WebSocket open for a short grace period so WS can
+    // finish transcribing the last audio it already received.
+    // Only wait if the socket is still healthy (skip if it closed on us).
+    if (_ws?.closeCode == null) {
+      await Future.delayed(const Duration(seconds: 3));
+    }
+
+    // Bail if a new session was started while we were waiting.
+    if (_sessionId != id) return;
+
+    final transcript = _session.transcript;
+    await _cleanup();
+    _emit(state: TranscriptionState.idle, elapsedSeconds: 0);
+    _onDone?.call(transcript);
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await _cleanup();
+    await _streamCtrl.close();
+    _recorder.dispose();
+  }
+
+  // -------------------------------------------------------------------------
+  // WebSocket
+  // -------------------------------------------------------------------------
+
+  Future<void> _openWebSocket() async {
+    final token = await AIService.getToken();
+    final wssUrl = AIService.workerUrl.replaceFirst('https://', 'wss://');
+    final uri = Uri.parse(
+        '$wssUrl/live-ws?lang=${Uri.encodeQueryComponent(localSettings.transcriptionOutputLocale)}');
+    _ws = connectWebSocket(
+      uri,
+      {'Authorization': 'Bearer $token'},
+    );
+
+    // Create the completer before subscribing to messages so we don't
+    // miss setupComplete (which the Worker sends on our behalf).
+    _setupCompleter = Completer<void>();
+
+    _wsSub = _ws!.stream.listen(
+      _onMessage,
+      onError: _onWsError,
+      onDone: _onWsDone,
+      cancelOnError: false,
+    );
+
+    await _ws!.ready;
+
+    debugPrint('[WSVoice] 🔌 Connected via worker. '
+        'Waiting for server-side setup...');
+
+    // The Worker handles the entire ws session setup (model,
+    // generation_config, system_instruction, etc.) and forwards
+    // setupComplete back to us. No setup payload sent from the client.
+    await _setupCompleter!.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => throw TimeoutException(
+          'WS setup took too long. Check your API key and network.'),
+    );
+  }
+
+  void _wsSend(Map<String, dynamic> payload) {
+    try {
+      _ws?.sink.add(jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  // -------------------------------------------------------------------------
+  // Audio
+  // -------------------------------------------------------------------------
+
+  Future<void> _startMic() async {
+    final stream = await _recorder.startStream(const RecordConfig(
+      encoder: AudioEncoder.pcm16bits,
+      sampleRate: 16000,
+      numChannels: 1,
+    ));
+
+    var audioChunksSent = 0;
+    _audioSub = stream.listen((bytes) {
+      if (_session.state != TranscriptionState.recording) return;
+
+      audioChunksSent++;
+      if (audioChunksSent % 50 == 1) {
+        debugPrint(
+            '[WSVoice] 🎙️ Sent $audioChunksSent audio chunks so far...');
+      }
+
+      // Each chunk is sent as a BidiGenerateContentRealtimeInput with
+      // base64-encoded raw PCM data and the required mime_type.
+      _wsSend({
+        'realtime_input': {
+          'audio': {
+            'mime_type': 'audio/pcm;rate=16000',
+            'data': base64Encode(bytes),
+          },
+        },
+      });
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Message handling
+  // -------------------------------------------------------------------------
+
+  void _onMessage(dynamic raw) {
+    // Messages arrive as Uint8List bytes on Android — decode before parsing.
+    final String text;
+    if (raw is String) {
+      text = raw;
+    } else if (raw is List<int>) {
+      text = utf8.decode(raw);
+    } else {
+      return;
+    }
+
+    final Map<String, dynamic> msg;
+    try {
+      msg = jsonDecode(text) as Map<String, dynamic>;
+    } catch (_) {
+      return;
+    }
+
+    debugPrint('[WSVoice] 📩 Received: $text');
+
+    // --- setupComplete -------------------------------------------------
+    // Server confirms the session is ready. Only now is it safe to begin
+    // streaming audio from the microphone.
+    if (msg.containsKey('setupComplete')) {
+      _onSetupComplete();
+      return;
+    }
+
+    // --- serverContent -------------------------------------------------
+    // The server sends response keys in camelCase:
+    //   • inputTranscription  — ASR result (user's speech → text)
+    //   • outputTranscription — text version of the model's audio response
+    //   • turnComplete        — signals the end of a model turn
+    if (msg.containsKey('serverContent')) {
+      final content = msg['serverContent'] as Map<String, dynamic>? ?? {};
+
+      // Input transcription: what the user said, recognised as text.
+      final inputTrans = content['inputTranscription'] as Map<String, dynamic>?;
+      final userText = inputTrans?['text'] as String? ?? '';
+      if (userText.isNotEmpty) {
+        debugPrint('[WSVoice] 🎤 inputTranscription: "$userText"');
+        _appendText(userText);
+      }
+
+      // Output transcription: the model repeating back — useful for
+      // debugging but we don't append it to avoid duplicates with
+      // inputTranscription (the real speech-to-text result).
+      final outputTrans =
+          content['outputTranscription'] as Map<String, dynamic>?;
+      final modelText = outputTrans?['text'] as String? ?? '';
+      if (modelText.isNotEmpty) {
+        debugPrint('[WSVoice] 🤖 outputTranscription (ignored): "$modelText"');
+      }
+
+      // Append a space after each completed turn to separate sentences.
+      if (content['turnComplete'] == true) {
+        if (_session.transcript.isNotEmpty &&
+            !_session.transcript.endsWith(' ')) {
+          _appendText(' ');
+        }
+      }
+      return;
+    }
+
+    // --- toolCall ------------------------------------------------------
+    // The model requested one or more function calls.
+    // Execute locally and send back a toolResponse per the spec.
+    if (msg.containsKey('toolCall')) {
+      _handleToolCall(msg['toolCall'] as Map<String, dynamic>? ?? {});
+      return;
+    }
+
+    // --- error ---------------------------------------------------------
+    if (msg.containsKey('error')) {
+      final err = msg['error'] as Map<String, dynamic>? ?? {};
+      final detail = 'WS error ${err['code']}: ${err['message']}';
+      debugPrint('[WSVoice] $detail');
+      if (_setupCompleter != null && !_setupCompleter!.isCompleted) {
+        _setupCompleter!.completeError(Exception(detail));
+      } else {
+        _cleanup().then((_) =>
+            _emit(state: TranscriptionState.error, error: Exception(detail)));
+      }
+      return;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // setupComplete handler
+  // ---------------------------------------------------------------------
+
+  void _onSetupComplete() {
+    _setupCompleter?.complete();
+
+    _startMic().then((_) {
+      _emit(state: TranscriptionState.recording);
+      final start = DateTime.now();
+
+      debugPrint('[WSVoice] ✅ setupComplete received — recording started.');
+
+      // Hard limit: stop transcription after 30 seconds.
+      _maxTimer = Timer(const Duration(seconds: 30), stopTranscription);
+
+      // Tick every second so the UI can display elapsed time.
+      _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _emit(elapsedSeconds: DateTime.now().difference(start).inSeconds);
+      });
+    }).catchError((Object e) {
+      _cleanup().then((_) => _emit(state: TranscriptionState.error, error: e));
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Tool call handling (per official documentation)
+  // ---------------------------------------------------------------------
+
+  void _handleToolCall(Map<String, dynamic> toolCall) {
+    final calls = toolCall['functionCalls'] as List<dynamic>? ?? [];
+    final responses = <Map<String, dynamic>>[];
+
+    for (final c in calls) {
+      final fc = c as Map<String, dynamic>;
+      final name = fc['name'] as String? ?? '';
+      final id = fc['id'] as String? ?? '';
+      final args = fc['args'] as Map<String, dynamic>? ?? {};
+
+      Object result;
+      try {
+        result = _executeTool(name, args);
+      } catch (e) {
+        debugPrint('[WSVoice] Tool error ($name): $e');
+        result = {'error': e.toString()};
+      }
+
+      responses.add({
+        'name': name,
+        'id': id,
+        'response': {'result': result},
+      });
+    }
+
+    if (responses.isNotEmpty) {
+      _wsSend({
+        'tool_response': {
+          'function_responses': responses,
+        },
+      });
+    }
+  }
+
+  /// Execute a tool function locally.
+  /// Override or extend for custom tool implementations.
+  Map<String, dynamic> _executeTool(String name, Map<String, dynamic> args) {
+    debugPrint('[WSVoice] Unknown tool call: $name($args)');
+    return {'status': 'unknown tool: $name'};
+  }
+
+  // ---------------------------------------------------------------------
+  // WebSocket lifecycle callbacks
+  // ---------------------------------------------------------------------
+
+  void _onWsError(Object error) {
+    debugPrint('[WSVoice] WS error: $error');
+    if (_setupCompleter != null && !_setupCompleter!.isCompleted) {
+      _setupCompleter!.completeError(error);
+      return;
+    }
+    if (isActive) {
+      _cleanup()
+          .then((_) => _emit(state: TranscriptionState.error, error: error));
+    }
+  }
+
+  void _onWsDone() {
+    final code = _ws?.closeCode;
+    final reason = _ws?.closeReason;
+    debugPrint('[WSVoice] WS closed. code=$code reason="$reason"');
+
+    if (_setupCompleter != null && !_setupCompleter!.isCompleted) {
+      _setupCompleter!.completeError(
+        Exception(
+            'WebSocket closed before setupComplete. code=$code reason="$reason"'),
+      );
+      return;
+    }
+    if (_session.state == TranscriptionState.recording) {
+      stopTranscription();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
+  void _appendText(String token) {
+    debugPrint('[WSVoice] ✏️ Appending: "$token"');
+    final base = _session.transcript;
+    // Insert a space between pre-existing content and the new transcription
+    final sep = base.isNotEmpty && !base.endsWith(' ') ? ' ' : '';
+    final next = '$base$sep$token';
+    debugPrint('[WSVoice] 📝 Full transcript now: "$next"');
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _emit(transcript: next);
+  }
+
+  void _emit({
+    TranscriptionState? state,
+    String? transcript,
+    int? elapsedSeconds,
+    Object? error,
+  }) {
+    if (_disposed && _streamCtrl.isClosed) return;
+    _session = _session.copyWith(
+      state: state,
+      transcript: transcript,
+      elapsedSeconds: elapsedSeconds,
+      error: error,
+    );
+    if (!_streamCtrl.isClosed) _streamCtrl.add(_session);
+  }
+
+  Future<void> _cleanup() async {
+    if (_setupCompleter != null && !_setupCompleter!.isCompleted) {
+      _setupCompleter!
+          .completeError(StateError('Cleanup before setupComplete.'));
+    }
+    _setupCompleter = null;
+
+    _maxTimer?.cancel();
+    _maxTimer = null;
+    _tickTimer?.cancel();
+    _tickTimer = null;
+
+    try {
+      if (await _recorder.isRecording()) await _recorder.stop();
+    } catch (_) {}
+
+    await _audioSub?.cancel();
+    _audioSub = null;
+
+    await _wsSub?.cancel();
+    _wsSub = null;
+
+    try {
+      await _ws?.sink.close();
+    } catch (_) {}
+    _ws = null;
+  }
+}
