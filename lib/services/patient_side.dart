@@ -291,7 +291,7 @@ Future<dynamic> _scanQRAPI(XFile xFile) async {
 
   final resized = Uint8List.fromList(img.encodeJpg(resizedImage, quality: 70));
   var request = http.MultipartRequest(
-      'POST', Uri.parse('https://qrread.alisaleem.workers.dev/'));
+      'POST', Uri.parse(qrReadWorkerUrl));
 
   request.files.add(
     http.MultipartFile.fromBytes(

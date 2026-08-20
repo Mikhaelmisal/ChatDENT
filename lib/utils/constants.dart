@@ -6,6 +6,8 @@ export 'package:chatdent/services/perm.dart';
 const shorteningServer = "https://p.chatdent.app";
 const patientWebOrigin = "https://web.chatdent.app";
 const demoPersonAvatarUrl = "https://i.pravatar.cc/150";
+/// Replace with your own QR decode endpoint when ready.
+const qrReadWorkerUrl = "https://qrread.chatdent.app/";
 
 const String alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 const String dataCollectionName = "data";
