@@ -72,6 +72,18 @@ class SaveLocal {
     }
   }
 
+  /// Permanently removes one or more keys from the main box.
+  Future<void> removeKeys(Iterable<String> keys) async {
+    try {
+      final box = await mainHiveBox;
+      for (final key in keys) {
+        await box.delete(key);
+      }
+    } catch (e, s) {
+      throw StorageException('Failed to remove keys: $e', s);
+    }
+  }
+
   // Get version from meta box
   Future<int> getVersion() async {
     try {

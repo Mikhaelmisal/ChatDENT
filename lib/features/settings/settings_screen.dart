@@ -1,5 +1,6 @@
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/dialogs/dialog_styling.dart';
+import 'package:chatdent/common_widgets/permanent_delete.dart';
 import 'package:chatdent/core/multi_stream_builder.dart';
 import 'package:chatdent/core/observable.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
@@ -92,6 +93,22 @@ class SettingsScreen extends StatelessWidget {
               initValue: globalSettings.get("phone__________").value,
               apply: (newVal) => globalSettings.set(
                   Setting.fromJson({"id": "phone__________", "value": newVal})),
+            ),
+          if (login.isAdmin)
+            SettingsItem(
+              title: txt("deletePasscode"),
+              identifier: "deletePasscode",
+              description: txt("deletePasscode_desc"),
+              icon: WindowsIcons.permissions,
+              inputType: InputType.text,
+              scope: Scope.app,
+              initValue: PermanentDeletePasscode.expected,
+              apply: (newVal) {
+                final pin = newVal.trim();
+                if (RegExp(r'^\d{4}$').hasMatch(pin)) {
+                  PermanentDeletePasscode.save(pin);
+                }
+              },
             ),
           SettingsItem(
             title: txt("language"),

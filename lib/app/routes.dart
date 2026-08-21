@@ -14,6 +14,7 @@ import 'package:chatdent/features/outreach/outreach_screen.dart';
 import 'package:chatdent/features/notes/notes_screen.dart';
 import 'package:chatdent/features/notes/notes_store.dart';
 import 'package:chatdent/features/patients/patients_screen.dart';
+import 'package:chatdent/features/prescriptions/prescriptions_screen.dart';
 import 'package:chatdent/features/stats/screen_stats.dart';
 import 'package:chatdent/features/accounts/accounts_screen.dart';
 import 'package:chatdent/services/backups.dart';
@@ -254,6 +255,18 @@ class _Routes {
               await accounts.reloadFromRemote();
               await patients.synchronize();
               await appointments.synchronize();
+            },
+          ),
+        if (login.perm(Perm.appointments).some || login.isAdmin)
+          Route(
+            title: txt("prescriptions"),
+            identifier: "prescriptions",
+            navbarTitle: txt("prescriptions"),
+            icon: FluentIcons.medical,
+            screen: PrescriptionsScreen.new,
+            accessible: login.perm(Perm.appointments).some || login.isAdmin,
+            onSelect: () async {
+              await globalSettings.synchronize();
             },
           ),
         Route(

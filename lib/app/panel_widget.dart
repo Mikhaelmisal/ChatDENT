@@ -1,9 +1,7 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/delete_button.dart';
 import 'package:chatdent/common_widgets/item_title.dart';
+import 'package:chatdent/common_widgets/permanent_delete.dart';
 import 'package:chatdent/common_widgets/dialogs/close_dialog_button.dart';
 import 'package:chatdent/common_widgets/swipe_detector.dart';
 import 'package:chatdent/core/model.dart';
@@ -16,6 +14,9 @@ import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/utils/flyout_focus_fix.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:chatdent/app/routes.dart';
 
 class PanelScreen extends StatefulWidget {
   final double layoutHeight;
@@ -220,6 +221,9 @@ class _PanelScreenState extends State<PanelScreen> {
                           widget.panel.additionalControls!,
                         if (widget.panel.showBottomControls) ...[
                           if (isNew == false) _buildArchiveButton(),
+                          if (isNew == false &&
+                              widget.panel.item.archived == true)
+                            _buildPermanentDeleteButton(),
                           _buildSaveButton(),
                         ],
                         _buildCancelButton(),
@@ -288,6 +292,28 @@ class _PanelScreenState extends State<PanelScreen> {
             icon: ButtonContent(WindowsIcons.save, txt("save")),
           );
         });
+  }
+
+  Widget _buildPermanentDeleteButton() {
+    return PermanentDeleteButton(
+      store: widget.panel.store,
+      itemId: widget.panel.item.id,
+      preview: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 5,
+        children: [
+          Icon(widget.panel.icon),
+          Txt(
+            "${txt(widget.panel.singularName)}:",
+            style: FluentTheme.of(context).typography.bodyStrong,
+          ),
+          ItemTitle(item: widget.panel.item),
+        ],
+      ),
+      onDeleted: () {
+        routes.closePanel(widget.panel.item.id);
+      },
+    );
   }
 
   Widget _buildArchiveButton() {

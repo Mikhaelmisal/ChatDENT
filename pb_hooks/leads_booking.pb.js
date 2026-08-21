@@ -87,7 +87,7 @@ routerAdd("POST", "/api/leads/upsert", (e) => {
       incoming || data.notes || "",
     ),
     welcomeText: b.withTemplate(b.WA_TPL.welcome, { name: name },
-      "Namaste {name},\n\nWelcome to {clinic}. Please reply with your full name and dental concern. A doctor or receptionist will call you to confirm. We do not share fees on WhatsApp.\n\n{phone}\n{address}\n{maps}"),
+      "Namaste {name},\n\nWelcome to {clinic}. Please reply with your full name and dental concern. A doctor or receptionist will call you to confirm.\n\n{phone}\n{address}\n{maps}"),
     optOutText: b.withTemplate(b.WA_TPL.optOut, { name: name },
       "Namaste {name},\n\nYou have been unsubscribed from {clinic} WhatsApp messages. For appointments call {phone}."),
   })
@@ -213,6 +213,7 @@ routerAdd("GET", "/api/leads/reminders", (e) => {
     if (kind === "24" && a.reminder24Sent) continue
     if (kind === "2" && a.reminder2Sent) continue
     const p = patientsById[a.patientID] || {}
+    if (!b.canMessagePatient(p)) continue
     const name = p.title || ""
     const text = b.withTemplate(
       b.WA_TPL.remind,

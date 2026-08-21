@@ -1,5 +1,6 @@
 import 'package:chatdent/core/observable.dart';
 import 'package:chatdent/features/login/login_controller.dart';
+import 'package:chatdent/features/leads/clinic_whatsapp.dart';
 import 'package:chatdent/services/launch.dart';
 import 'package:chatdent/services/network.dart';
 import 'package:chatdent/utils/hash.dart';
@@ -162,6 +163,8 @@ class Appointments extends Store<Appointment> {
       return () async {
         loginCtrl.loadingIndicator("Synchronizing appointments");
         await synchronize();
+        // ignore: unawaited_futures
+        ClinicWhatsApp.flushPendingBriefConfirms();
         networkActions.syncCallbacks[_storeName] = synchronize;
         networkActions.reconnectCallbacks[_storeName] = remote!.checkOnline;
 

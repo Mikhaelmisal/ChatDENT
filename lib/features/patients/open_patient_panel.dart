@@ -31,7 +31,9 @@ import 'package:chatdent/common_widgets/appointment_card.dart';
 import 'package:chatdent/common_widgets/qrlink.dart';
 import 'package:chatdent/common_widgets/tag_input.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
+import 'package:chatdent/features/leads/clinic_whatsapp.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
+import 'package:chatdent/features/prescriptions/patient_prescriptions.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/widget_keys.dart';
@@ -43,16 +45,46 @@ final transcriptionEditCounter = ObservableState(0);
 
 Future<Patient> openPatient([Patient? patient, int? selectedTabIndex]) {
   final editingCopy = Patient.fromJson(patient?.toJson() ?? {});
-  final panel = Panel<Patient>(
+  final wasNew = patients.get(editingCopy.id) == null;
+  final previous = wasNew ? null : Patient.fromJson(patient!.toJson());
+  late final Panel<Patient> panel;
+  panel = Panel<Patient>(
     singularName: "patient",
     unicodeSymbol: "👤",
     selectedTabIndex: selectedTabIndex,
     item: editingCopy,
     store: patients,
     icon: FluentIcons.medication_admin,
-    title: patients.get(editingCopy.id) == null
-        ? txt("newPatient")
-        : editingCopy.title,
+    title: wasNew ? txt("newPatient") : editingCopy.title,
+    onSave: () {
+      final isFirstSave = patients.get(editingCopy.id) == null;
+      final hadPhone =
+          previous != null && previous.phonesString.trim().isNotEmpty;
+      patients.set(editingCopy);
+      panel.savedJson = jsonEncode(editingCopy.toJson());
+      panel.identifier = editingCopy.id;
+      if (!panel.result.isCompleted) {
+        panel.result.complete(editingCopy);
+      }
+      final shouldWelcome = editingCopy.phonesString.trim().isNotEmpty &&
+          !editingCopy.welcomeWhatsAppSent &&
+          editingCopy.intakeSource == PatientIntakeSource.phoneCall &&
+          (isFirstSave || !hadPhone);
+      if (shouldWelcome) {
+        editingCopy.welcomeWhatsAppSent = true;
+        patients.set(editingCopy);
+        panel.savedJson = jsonEncode(editingCopy.toJson());
+        ClinicWhatsApp.sendForNewPatient(editingCopy);
+      }
+      if (editingCopy.whatsappHold || editingCopy.archived == true) {
+        for (final a in appointments.present.values) {
+          if (a.patientID != editingCopy.id) continue;
+          if (a.briefConfirmDueMs == null && !a.briefConfirmSent) continue;
+          a.briefConfirmDueMs = null;
+          appointments.set(a);
+        }
+      }
+    },
     tabs: [
       PanelTab(
         title: txt("patientDetails"),
@@ -161,6 +193,14 @@ Future<Patient> openPatient([Patient? patient, int? selectedTabIndex]) {
           icon: WindowsIcons.calendar,
           body: PatientAppointments(editingCopy),
           footer: AppointmentsListFooter(forPatientID: editingCopy.id),
+          onlyIfSaved: true,
+          padding: 0,
+        ),
+      if (login.perm(Perm.appointments).some)
+        PanelTab(
+          title: txt("prescriptions"),
+          icon: FluentIcons.pill,
+          body: PatientPrescriptions(editingCopy),
           onlyIfSaved: true,
           padding: 0,
         ),
@@ -546,7 +586,33 @@ class _PatientDetailsState extends State<_PatientDetails> {
           ),
         ),
         Row(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            width: 72,
+            child: InfoLabel(
+              label: "${txt("age")}:",
+              isHeader: true,
+              child: Container(
+                height: 32,
+                alignment: AlignmentDirectional.centerStart,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5),
+                  color: FluentTheme.of(context)
+                      .resources
+                      .controlFillColorDisabled,
+                ),
+                child: Txt(
+                  widget.patient.age > 0
+                      ? widget.patient.age.toString()
+                      : "—",
+                  style: inputStyle,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
+            flex: 2,
             child: InfoLabel(
               label: "${_capFirst(txt("birthdate"))}:",
               isHeader: true,
@@ -574,6 +640,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
           ),
           const SizedBox(width: 10),
           Expanded(
+            flex: 2,
             child: InfoLabel(
               label: "${txt("gender")}:",
               isHeader: true,
@@ -667,6 +734,48 @@ class _PatientDetailsState extends State<_PatientDetails> {
         if (phoneTextController.text.isNotEmpty &&
             phoneTextController.text.length < IndiaPhone.localLength)
           Txt(txt("phoneMustBe10Digits")),
+        const SizedBox(height: 10),
+        InfoLabel(
+          label: "${txt("patientIntakeSource")}:",
+          isHeader: true,
+          child: ComboBox<String>(
+            isExpanded: true,
+            value: widget.patient.intakeSource == PatientIntakeSource.phoneCall
+                ? PatientIntakeSource.phoneCall
+                : PatientIntakeSource.walkIn,
+            items: [
+              ComboBoxItem(
+                value: PatientIntakeSource.walkIn,
+                child: Text(txt("intakeWalkIn")),
+              ),
+              ComboBoxItem(
+                value: PatientIntakeSource.phoneCall,
+                child: Text(txt("intakePhoneCall")),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                widget.patient.intakeSource =
+                    value ?? PatientIntakeSource.walkIn;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Checkbox(
+          checked: widget.patient.whatsappHold,
+          content: Text(txt("whatsappHoldPatient")),
+          onChanged: (v) {
+            setState(() {
+              widget.patient.whatsappHold = v == true;
+            });
+          },
+        ),
+        if (widget.patient.whatsappHold)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Txt(txt("whatsappHoldPatientHint")),
+          ),
         const SizedBox(height: 10),
         InfoLabel(
           label: "${txt("address")}:",

@@ -18,6 +18,12 @@ import 'package:chatdent/utils/phone_numbers_extractor.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:http/http.dart' as http;
 
+/// How staff first registered this patient in ChatDENT.
+class PatientIntakeSource {
+  static const walkIn = 'walk_in';
+  static const phoneCall = 'phone_call';
+}
+
 class PatientTableLabel {
   final IconData icon;
   final Color? color;
@@ -28,11 +34,16 @@ class PatientTableLabel {
   final bool sortable;
   final int tab;
   final bool view;
+  /// Optional fixed chip width (patient list bottom labels).
+  final double? chipWidth;
+  final double? titleWidth;
 
   PatientTableLabel({
     this.icon = FluentIcons.document,
     this.color,
     this.view = true,
+    this.chipWidth,
+    this.titleWidth,
     required this.title,
     required this.content,
     required this.value,
@@ -320,6 +331,8 @@ class Patient extends Model {
       searchableString: age.toString(),
       sortable: true,
       tab: 0,
+      chipWidth: 70,
+      titleWidth: 32,
     ));
 
     // gender
@@ -333,6 +346,8 @@ class Patient extends Model {
       searchableString: gender == 1 ? "male" : "female",
       sortable: true,
       tab: 0,
+      chipWidth: 110,
+      titleWidth: 52,
     ));
 
     // phones
@@ -353,7 +368,7 @@ class Patient extends Model {
       value: 0,
       searchableString: "",
       sortable: false,
-      tab: 3,
+      tab: 4,
       icon: FluentIcons.q_r_code,
     ));
 
@@ -380,6 +395,18 @@ class Patient extends Model {
       content: lastVisitContent,
       sortable: true,
       tab: 2,
+    ));
+
+    final rxCount = allAppointments.fold<int>(
+        0, (n, a) => n + a.prescriptions.length);
+    _.add(PatientTableLabel(
+      icon: FluentIcons.pill,
+      title: txt("prescriptions"),
+      searchableString: txt("prescriptions"),
+      value: rxCount.toDouble(),
+      content: rxCount == 0 ? txt("none") : rxCount.toString(),
+      sortable: true,
+      tab: 3,
     ));
 
     final paymentStatus = txt(underPaid
@@ -445,13 +472,29 @@ class Patient extends Model {
     final longLink =
         "$patientWebOrigin/${encode("$id|$title|${login.url}|${await PushRelay.ensureKey()}")}";
 
-    final shortLink = await http.put(Uri.parse(shorteningServer),
-        body: jsonEncode({"long": longLink}));
-    return shortLink.body;
+    try {
+      final shortLink = await http
+          .put(Uri.parse(shorteningServer),
+              body: jsonEncode({"long": longLink}))
+          .timeout(const Duration(seconds: 8));
+      final body = shortLink.body.trim();
+      if (shortLink.statusCode >= 200 &&
+          shortLink.statusCode < 300 &&
+          body.isNotEmpty) {
+        return body;
+      }
+    } catch (_) {
+      // p.chatdent.app / web.chatdent.app are optional until cloud patient portal is hosted.
+    }
+    // Fallback so QR UI still has a link string (opens once patient web is deployed).
+    return longLink;
   }
 
   get shortLink {
-    if (link == null) return "";
+    if (link == null || link!.isEmpty) return "";
+    if (link!.startsWith("http://") || link!.startsWith("https://")) {
+      return link!;
+    }
     return "$shorteningServer/$link";
   }
 
@@ -473,6 +516,11 @@ class Patient extends Model {
   /* 13 */ int reviewAskLast = 0;
   /* 14 */ bool fromLead = false;
   /* 15 */ String fromLeadId = '';
+  /// How this patient entered the clinic workflow.
+  /* 16 */ String intakeSource = PatientIntakeSource.walkIn;
+  /* 17 */ bool welcomeWhatsAppSent = false;
+  /// When true, skip all clinic WhatsApp (reminders, leave pack, etc.).
+  /* 18 */ bool whatsappHold = false;
 
   String get phonesString =>
       phone.map((p) => '${p.countryCode}${p.nsn}').join('');
@@ -533,6 +581,13 @@ class Patient extends Model {
     /* 13 */ reviewAskLast = json["reviewAskLast"] ?? reviewAskLast;
     /* 14 */ fromLead = json["fromLead"] ?? fromLead;
     /* 15 */ fromLeadId = json["fromLeadId"] ?? fromLeadId;
+    /* 16 */ intakeSource = json["intakeSource"]?.toString() ?? intakeSource;
+    if (intakeSource != PatientIntakeSource.phoneCall) {
+      intakeSource = PatientIntakeSource.walkIn;
+    }
+    /* 17 */ welcomeWhatsAppSent =
+        json["welcomeWhatsAppSent"] ?? welcomeWhatsAppSent;
+    /* 18 */ whatsappHold = json["whatsappHold"] ?? whatsappHold;
   }
 
   @override
@@ -563,6 +618,15 @@ class Patient extends Model {
     }
     /* 14 */ if (fromLead != d.fromLead) json['fromLead'] = fromLead;
     /* 15 */ if (fromLeadId != d.fromLeadId) json['fromLeadId'] = fromLeadId;
+    /* 16 */ if (intakeSource != d.intakeSource) {
+      json['intakeSource'] = intakeSource;
+    }
+    /* 17 */ if (welcomeWhatsAppSent != d.welcomeWhatsAppSent) {
+      json['welcomeWhatsAppSent'] = welcomeWhatsAppSent;
+    }
+    /* 18 */ if (whatsappHold != d.whatsappHold) {
+      json['whatsappHold'] = whatsappHold;
+    }
     return json;
   }
 }

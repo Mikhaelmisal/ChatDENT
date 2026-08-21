@@ -1,4 +1,5 @@
 const prev = $('Build AI prompt').first().json || {};
+const inbound = $('Parse inbound').first().json || {};
 const raw = $input.first().json || {};
 let content = '';
 if (raw.choices && raw.choices[0] && raw.choices[0].message) {
@@ -14,6 +15,24 @@ const events = parsed.events || [];
 if (parsed.markInterested) events.push({ type: 'interested' });
 if (parsed.reschedule) events.push({ type: 'reschedule' });
 if (parsed.reviewDone) events.push({ type: 'review_done' });
+
+// Deterministic: patient replies DONE / reviewed after our review request.
+const inboundText = String(inbound.text || '').toLowerCase().trim();
+const reviewDonePhrase =
+  /^(done|reviewed|review done|yes done|i (left|gave|posted|submitted) (a )?review|left a review|gave review)\b/.test(
+    inboundText
+  ) ||
+  inboundText === 'done' ||
+  inboundText.includes('left a review') ||
+  inboundText.includes('gave a review') ||
+  inboundText.includes('posted a review');
+if (reviewDonePhrase && !events.some(function (e) { return e && e.type === 'review_done'; })) {
+  events.push({ type: 'review_done' });
+  if (!parsed.reply || !String(parsed.reply).trim()) {
+    parsed.reply = 'Thank you so much for leaving a review — it means a lot to our team! 🙏';
+  }
+}
+
 events.push({ type: 'assistant_replied' });
 
 return [{

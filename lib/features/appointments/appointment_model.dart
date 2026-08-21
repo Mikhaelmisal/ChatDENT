@@ -84,7 +84,8 @@ class Appointment extends Model {
   bool get isMissed {
     return date.isBefore(DateTime.now()) &&
         date.difference(DateTime.now()).inDays.abs() > 0 &&
-        !isDone;
+        !isDone &&
+        !isNoShow;
   }
 
   DateTime get endDate => date.add(Duration(minutes: duration));
@@ -144,6 +145,13 @@ class Appointment extends Model {
   /* 19 */ bool reminder24Sent = false;
   /* 20 */ bool reminder2Sent = false;
   /* 21 */ bool rescheduleRequested = false;
+  /* 22 */ bool isNoShow = false;
+  /* 23 */ bool confirmWhatsAppSent = false;
+  /* 24 */ bool noShowWhatsAppSent = false;
+  /* 25 */ bool aftercareWhatsAppSent = false;
+  /* 26 */ String? treatmentPlanId;
+  /* 27 */ int? briefConfirmDueMs;
+  /* 28 */ bool briefConfirmSent = false;
 
   Appointment.fromJson(super.json) : super.fromJson();
 
@@ -183,6 +191,19 @@ class Appointment extends Model {
     /* 20 */ reminder2Sent = json["reminder2Sent"] ?? reminder2Sent;
     /* 21 */ rescheduleRequested =
         json["rescheduleRequested"] ?? rescheduleRequested;
+    /* 22 */ isNoShow = json["isNoShow"] ?? isNoShow;
+    /* 23 */ confirmWhatsAppSent =
+        json["confirmWhatsAppSent"] ?? confirmWhatsAppSent;
+    /* 24 */ noShowWhatsAppSent =
+        json["noShowWhatsAppSent"] ?? noShowWhatsAppSent;
+    /* 25 */ aftercareWhatsAppSent =
+        json["aftercareWhatsAppSent"] ?? aftercareWhatsAppSent;
+    /* 26 */ treatmentPlanId =
+        json["treatmentPlanId"]?.toString() ?? treatmentPlanId;
+    /* 27 */ briefConfirmDueMs = json["briefConfirmDueMs"] is num
+        ? (json["briefConfirmDueMs"] as num).toInt()
+        : briefConfirmDueMs;
+    /* 28 */ briefConfirmSent = json["briefConfirmSent"] ?? briefConfirmSent;
   }
 
   @override
@@ -221,6 +242,25 @@ class Appointment extends Model {
     }
     /* 21 */ if (rescheduleRequested != d.rescheduleRequested) {
       json['rescheduleRequested'] = rescheduleRequested;
+    }
+    /* 22 */ if (isNoShow != d.isNoShow) json['isNoShow'] = isNoShow;
+    /* 23 */ if (confirmWhatsAppSent != d.confirmWhatsAppSent) {
+      json['confirmWhatsAppSent'] = confirmWhatsAppSent;
+    }
+    /* 24 */ if (noShowWhatsAppSent != d.noShowWhatsAppSent) {
+      json['noShowWhatsAppSent'] = noShowWhatsAppSent;
+    }
+    /* 25 */ if (aftercareWhatsAppSent != d.aftercareWhatsAppSent) {
+      json['aftercareWhatsAppSent'] = aftercareWhatsAppSent;
+    }
+    /* 26 */ if (treatmentPlanId != null && treatmentPlanId!.isNotEmpty) {
+      json['treatmentPlanId'] = treatmentPlanId;
+    }
+    /* 27 */ if (briefConfirmDueMs != d.briefConfirmDueMs) {
+      json['briefConfirmDueMs'] = briefConfirmDueMs ?? 0;
+    }
+    /* 28 */ if (briefConfirmSent != d.briefConfirmSent) {
+      json['briefConfirmSent'] = briefConfirmSent;
     }
 
     json.remove("title"); // remove since it is a computed value in this case

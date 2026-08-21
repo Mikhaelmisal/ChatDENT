@@ -536,14 +536,10 @@ class ClickableBottomLabel extends StatelessWidget {
       message: "${label.title}: ${label.content}",
       child: GestureDetector(
         onTap: () {
-          if (label.title == txt("phone")) {
-            phoneButtonKey.currentState?.showMenu();
-          } else {
-            openPatient(patient, targetTab);
-          }
+          _activate(label, patient, targetTab);
         },
         child: Container(
-          width: cW + 5,
+          width: label.chipWidth ?? (cW + 5),
           padding: const EdgeInsets.symmetric(horizontal: 2),
           decoration:
               searchStringLowerCased == label.searchableString.toLowerCase() &&
@@ -575,7 +571,7 @@ class ClickableBottomLabel extends StatelessWidget {
                       color: label.color == null ? null : Colors.white),
                   style: darkIconButtonStyle(context, label.color),
                   onPressed: () {
-                    openPatient(patient, targetTab);
+                    _activate(label, patient, targetTab);
                   },
                 ),
               Column(
@@ -595,9 +591,17 @@ class ClickableBottomLabel extends StatelessWidget {
     );
   }
 
+  void _activate(PatientTableLabel label, Patient patient, int targetTab) {
+    if (label.title == txt("phone")) {
+      phoneButtonKey.currentState?.showMenu();
+      return;
+    }
+    openPatient(patient, targetTab);
+  }
+
   Widget _buildTitle() {
     return SizedBox(
-      width: 89,
+      width: label.titleWidth ?? 89,
       child: Txt(
         label.title,
         style: TextStyle(

@@ -83,7 +83,10 @@ class GlobalSettings extends Store<Setting> {
     "n8n_book_token_": "",
     "wa_campaign____": "",
     "wa_templates___": "",
+    "wa_tpl_ver_____": "0",
     "wa_flyer_______": "",
+    "med_catalog____": "",
+    "perm_del_pin___": "1234",
   };
 
   @override

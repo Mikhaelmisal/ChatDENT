@@ -10,7 +10,7 @@ import 'package:chatdent/services/notifications/push_relay.dart';
 import 'package:chatdent/services/notifications/push_deferring.dart';
 import 'package:chatdent/utils/constants.dart';
 import 'package:chatdent/utils/logger.dart';
-import 'package:http/http.dart';
+import 'package:http/http.dart' hide ClientException;
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
@@ -20,6 +20,7 @@ import 'save_local.dart';
 import 'save_remote.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/utils/phone_numbers_extractor.dart';
+import 'package:pocketbase/pocketbase.dart';
 
 typedef ModellingFunc<G> = G Function(Map<String, dynamic> input);
 
@@ -295,6 +296,16 @@ class Store<G extends Model> {
       VersionedResult remoteUpdates =
           await remote!.getSince(version: localVersion);
 
+      // Do not resurrect rows queued for permanent delete.
+      final pendingDeletes = deferred.keys
+          .where((k) => k.startsWith('DELETE||'))
+          .map((k) => k.substring('DELETE||'.length))
+          .toSet();
+      if (pendingDeletes.isNotEmpty) {
+        remoteUpdates.rows
+            .removeWhere((r) => pendingDeletes.contains(r.id));
+      }
+
       if (remoteVersion == 0 &&
           localVersion > 0 &&
           remoteUpdates.rows.isEmpty) {
@@ -494,6 +505,25 @@ class Store<G extends Model> {
               succeededFileKeys.add(entry.key);
             }
           });
+        } else if (entry.key.startsWith('DELETE||')) {
+          final deleteId = entry.key.substring('DELETE||'.length);
+          fileHandling.add(() async {
+            try {
+              await remote!.deleteIds([deleteId]);
+              succeededFileKeys.add(entry.key);
+            } catch (e, s) {
+              // Still clear the queue if the server already has no such row.
+              if (e is ClientException && SaveRemote.isAlreadyGone(e)) {
+                succeededFileKeys.add(entry.key);
+                return;
+              }
+              logger(
+                'Deferred permanent delete failed for $deleteId: $e',
+                s,
+                2,
+              );
+            }
+          });
         } else {
           toRemoteWrite.addAll({entry.key: await local!.get(entry.key)});
         }
@@ -530,13 +560,15 @@ class Store<G extends Model> {
       }
 
       // Clean up deferred entries that were successfully processed.
-      // - Non-FILE entries were handled via toRemoteWrite above.
-      // - Succeeded FILE entries are tracked in succeededFileKeys.
-      // - Failed FILE entries were re-queued with incremented retries
-      //   by the catch block — those must NOT be cleared here.
+      // - Document upserts (plain ids) were flushed via toRemoteWrite.
+      // - FILE / DELETE|| entries stay until listed in succeededFileKeys.
       final currentDeferred = await local!.getDeferred();
-      currentDeferred.removeWhere(
-          (k, _) => !k.startsWith("FILE") || succeededFileKeys.contains(k));
+      currentDeferred.removeWhere((k, _) {
+        if (k.startsWith('FILE') || k.startsWith('DELETE||')) {
+          return succeededFileKeys.contains(k);
+        }
+        return true;
+      });
       await local!.putDeferred(currentDeferred);
       deferredPresent = currentDeferred.isNotEmpty;
 
@@ -840,6 +872,50 @@ class Store<G extends Model> {
   /// archives a document by id (the concept of deletion is not supported here)
   void delete(String id) {
     archive(id);
+  }
+
+  /// Permanently removes a document from memory, local storage, and PocketBase.
+  ///
+  /// Soft-delete ([archive]) can still be restored from Deleted Items. This
+  /// cannot. Offline deletes are queued as `DELETE||{id}` and flushed on sync.
+  Future<void> permanentDelete(String id) async {
+    final item = get(id);
+    if (item == null) return;
+
+    archived.remove(id);
+    observableMap.remove(id);
+
+    if (isDemo == true) return;
+    if (local == null) return;
+
+    await local!.removeKeys([id]);
+
+    var deferred = await local!.getDeferred();
+    deferred.remove(id);
+    deferred.removeWhere((k, _) => k.startsWith('FILE||$id||'));
+    final deleteKey = 'DELETE||$id';
+    deferred[deleteKey] = DateTime.now().millisecondsSinceEpoch;
+    await local!.putDeferred(deferred);
+    deferredPresent = true;
+
+    if (remote != null && remote!.isOnline) {
+      try {
+        await remote!.deleteIds([id]);
+        deferred = await local!.getDeferred();
+        deferred.remove(deleteKey);
+        await local!.putDeferred(deferred);
+        deferredPresent = deferred.isNotEmpty;
+      } catch (e, s) {
+        if (e is ClientException && SaveRemote.isAlreadyGone(e)) {
+          deferred = await local!.getDeferred();
+          deferred.remove(deleteKey);
+          await local!.putDeferred(deferred);
+          deferredPresent = deferred.isNotEmpty;
+          return;
+        }
+        logger('permanentDelete: remote delete deferred for $id: $e', s, 2);
+      }
+    }
   }
 
   /// delete an image

@@ -29,7 +29,7 @@ Future<void> printingPrescription(
           pw.SizedBox(height: 5),
           ...List<pw.Widget>.generate(prescription.length, (index) {
             final e = prescription[index];
-            return pw.Text("${index + 1}. ${e.split("-").join(" ")}");
+            return pw.Text("${index + 1}. $e");
           }),
           pw.SizedBox(height: 10),
           pw.Center(

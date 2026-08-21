@@ -9,26 +9,42 @@ import 'package:chatdent/utils/uuid.dart';
 /// PocketBase-safe 15-char ids for canned WhatsApp messages (Settings JSON).
 class WhatsAppTemplateIds {
   static const settingId = 'wa_templates___';
+  static const versionId = 'wa_tpl_ver_____';
   static const legacyColumn = 'wa_msg_column__';
   static const welcome = 'wa_welcome_____';
   static const confirm = 'wa_confirm_____';
+  static const welcomeConfirm = 'wa_welconfirm__';
   static const history = 'wa_history_____';
   static const aftercare = 'wa_aftercare___';
   static const remind = 'wa_remind______';
   static const birthday = 'wa_birthday____';
   static const review = 'wa_review______';
+  static const noShow = 'wa_noshow______';
+  static const reschedule = 'wa_reschedule__';
+  static const prescription = 'wa_rx__________';
+  static const leave = 'wa_leave________';
+  static const nextBrief = 'wa_next_brief___';
   static const alertNew = 'wa_alert_new___';
   static const alertBack = 'wa_alert_back__';
   static const optOut = 'wa_optout______';
 
+  /// Bump to force-refresh saved defaults after copy improvements.
+  static const templatesVersion = 4;
+
   static const allIds = [
     welcome,
     confirm,
+    welcomeConfirm,
     history,
     aftercare,
     remind,
     birthday,
     review,
+    noShow,
+    reschedule,
+    prescription,
+    leave,
+    nextBrief,
     alertNew,
     alertBack,
     optOut,
@@ -127,145 +143,201 @@ class WhatsAppTemplates {
 }
 
 const _welcomeBody = '''
-Namaste {name},
+Hi {name},
 
-Welcome to {clinic}.
+Welcome to {clinic}!
 
 To help us prepare for your visit, please reply with:
-• Your full name
-• The dental concern (tooth pain, cleaning, braces, implant, gum, kids, or other)
+1) Your full name
+2) Your dental concern (pain, cleaning, braces, implant, gum, kids, or other)
 
-A doctor or receptionist will call you to confirm the appointment. We do not share fees on WhatsApp — the doctor will discuss this with you in person or on the call.
+A doctor or receptionist will call you to confirm your appointment.
 
-Important contacts:
-📞 Appointments: {phone}
-
-📍 Clinic
-{address}
-
-{maps}
+Appointments: {phone}
 
 We look forward to taking care of your smile.
 
-{clinic} Team
+- Team {clinic}
 ''';
 
 const _confirmBody = '''
-Namaste {name},
+Hi {name},
 
 Your visit at {clinic} is confirmed.
 
-📅 Date: {date}
-🗓️ Day: {day}
-🕒 Time: {time}
+Date: {date}
+Day: {day}
+Time: {time}
 
-📍 Location:
-{address}
+Please arrive 10-15 minutes early.
 
-{maps}
+Need help? Call {phone}
 
-Before your visit, kindly bring:
-* Previous prescriptions
-* Current medicines you are taking
-* X-rays or scans (if you have them)
-* Previous dental treatment records, if available
+- Team {clinic}
+''';
 
-Please arrive 10–15 minutes before your appointment.
+const _welcomeConfirmBody = '''
+Hi {name},
 
-For any assistance, contact:
-{phone}
+Welcome to {clinic} - your visit is confirmed!
 
-{clinic} Team
+Date: {date}
+Day: {day}
+Time: {time}
+
+Please arrive 10-15 minutes early.
+
+Need help? Call {phone}
+
+- Team {clinic}
 ''';
 
 const _historyBody = '''
-Namaste {name},
+Hi {name},
 
-Before your consultation at {clinic}, please keep the following ready so the doctor can help you properly:
+Before your consultation at {clinic}, please share a short list (or we can take it on the call):
 
-• Any medical conditions (diabetes, BP, heart, thyroid, allergies)
-• Medicines you take every day
-• If you are pregnant or breastfeeding
-• Previous dental work (root canal, braces, implants, extractions)
+- Medical conditions (diabetes, BP, heart, thyroid, allergies)
+- Daily medicines
+- Pregnancy / breastfeeding (if applicable)
+- Previous dental work (RCT, braces, implants, extractions)
 
-You can reply here in a short list, or we will take this history when the doctor calls.
+{phone}
 
-We never quote treatment fees on WhatsApp.
-
-📞 {phone}
-📍 {address}
-
-{clinic} Team
+- Team {clinic}
 ''';
 
 const _aftercareBody = '''
-Namaste {name},
+Hi {name},
 
-Thank you for visiting {clinic}.
+Thank you for visiting {clinic} today. We are glad we could take care of you.
 
-If you had a procedure today:
-• Bite on the gauze as instructed
-• Avoid hot drinks and rinsing for a few hours if you had an extraction
-• Take medicines only as the doctor prescribed
-• Call us if pain or swelling increases
+Please follow the doctor's advice and call us if pain or swelling increases.
 
-If you were happy with your care, we would be grateful for a Google review when you have a moment.
+We hope you feel better soon.
 
-For questions, call {phone}. The doctor will advise on fees or further treatment only on a call or in the clinic.
+{phone}
 
-{clinic} Team
+- Team {clinic}
 ''';
 
 const _remindBody = '''
-Namaste {name},
+Hi {name},
 
-Reminder: you have an appointment at {clinic}.
+This is a gentle reminder for your appointment at {clinic} tomorrow.
 
-📅 Date: {date}
-🗓️ Day: {day}
-🕒 Time: {time}
+Date: {date}
+Day: {day}
+Time: {time}
 
-📍 Location:
-{address}
+Please arrive 10-15 minutes early.
+Reply RESCHEDULE if you need a different time - our team will call you.
 
-{maps}
-
-Please arrive 10–15 minutes before your appointment. Reply RESCHEDULE if you need a different time and our team will call you.
-
-For any assistance, contact:
 {phone}
 
-{clinic} Team
+- Team {clinic}
 ''';
 
 const _birthdayBody = '''
-Namaste {name},
+Hi {name},
 
-Happy birthday from everyone at {clinic}! We wish you a wonderful year and a healthy smile.
+Happy birthday from everyone at {clinic}!
 
-We would love to see you when it is convenient. A doctor will discuss any treatment in person or on a call — we do not share fees on WhatsApp.
+We wish you a wonderful year and a healthy smile.
+We would love to see you when it is convenient.
 
-📞 {phone}
-📍 {address}
+{phone}
 
-{clinic} Team
+- Team {clinic}
 ''';
 
 const _reviewBody = '''
-Namaste {name},
+Hi {name},
 
-Thank you for visiting {clinic}. If you were happy with your care, please leave us a Google review:
+Thank you for visiting {clinic}.
+
+If you were happy with your care, your Google review means a lot to our team.
+
+Please tap the link below to leave a review:
 
 {reviewUrl}
 
-For any assistance, contact:
+After you submit it, reply here with DONE - we will note it on your record.
+
+Thank you again for trusting us with your smile.
+
+- Team {clinic}
+''';
+
+const _noShowBody = '''
+Hi {name},
+
+We missed you at {clinic} for your visit on {date} at {time}.
+
+Reply here or call {phone} and we will help you book a new time.
+
+- Team {clinic}
+''';
+
+const _rescheduleBody = '''
+Hi {name},
+
+Your visit at {clinic} has been updated.
+
+Date: {date}
+Day: {day}
+Time: {time}
+
+Please arrive 10-15 minutes early.
+
+Need help? Call {phone}
+
+- Team {clinic}
+''';
+
+const _prescriptionBody = '''
+Hi {name},
+
+Thank you for visiting {clinic}. Here is your prescription:
+
+{note}
+
+Please take the medicines exactly as advised.
+
+We hope you feel better soon.
+
 {phone}
 
-{clinic} Team
+- Team {clinic}
+''';
+
+const _leaveBody = '''
+Hi {name},
+
+Welcome - thank you for visiting {clinic} today.
+
+{note}We hope you feel better soon. Please follow the doctor's advice and call us if anything worries you.
+
+{phone}
+
+- Team {clinic}
+''';
+
+const _nextBriefBody = '''
+Hi {name},
+
+Your next visit at {clinic}:
+
+Date: {date}
+Time: {time}
+
+See you then.
+
+- Team {clinic}
 ''';
 
 const _alertNewBody = '''
-🆕 New WhatsApp lead
+New WhatsApp lead
 
 Phone: {phone}
 Name: {name}
@@ -275,7 +347,7 @@ Please call from the clinic number. Do not reply in this group.
 ''';
 
 const _alertBackBody = '''
-🔁 Returning patient
+Returning patient
 
 Phone: {phone}
 Name: {name}
@@ -285,14 +357,28 @@ Please call from the clinic number. Do not reply in this group.
 ''';
 
 const _optOutBody = '''
-Namaste {name},
+Hi {name},
 
 You have been unsubscribed from {clinic} WhatsApp messages. We will not send further campaigns.
 
 For appointments you can still call {phone}.
 
-{clinic} Team
+- Team {clinic}
 ''';
+
+
+String sanitizeWhatsAppText(String raw) {
+  return raw
+      .replaceAll('\u2014', '-')
+      .replaceAll('\u2013', '-')
+      .replaceAll('\u2022', '-')
+      .replaceAll('\u2018', "'")
+      .replaceAll('\u2019', "'")
+      .replaceAll('\u201c', '"')
+      .replaceAll('\u201d', '"')
+      .replaceAll('\u00a0', ' ')
+      .trim();
+}
 
 String fillWhatsAppTemplate(
   String raw, {
@@ -302,30 +388,37 @@ String fillWhatsAppTemplate(
   String time = '',
   String note = '',
   String reviewUrl = '',
+  bool includeMaps = false,
 }) {
   final evo = EvolutionSettings.fromJsonString(
     globalSettings.evolutionSettingsJson,
   );
-  final clinic = evo.clinicName.trim().isEmpty ? 'Smile Dental Care' : evo.clinicName.trim();
+  final clinicRaw = evo.clinicName.trim().isEmpty
+      ? 'Smile Dental Care'
+      : evo.clinicName.trim();
+  // WhatsApp markdown bold so clinic branding always stands out.
+  final clinic = clinicRaw.contains('*') ? clinicRaw : '*$clinicRaw*';
   final phone = globalSettings.phone.trim().isEmpty
       ? '+91 86001 06020'
       : globalSettings.phone.trim();
   final address = evo.clinicAddress.trim().isEmpty
-      ? 'Please see the Google Maps link below.'
+      ? 'Please ask the clinic for directions.'
       : evo.clinicAddress.trim();
-  final maps = evo.googleMapsUrl.trim();
-  return raw
-      .replaceAll('{name}', name.trim().isEmpty ? 'ji' : name.trim())
-      .replaceAll('{clinic}', clinic)
-      .replaceAll('{phone}', phone)
-      .replaceAll('{address}', address)
-      .replaceAll('{maps}', maps)
-      .replaceAll('{date}', date)
-      .replaceAll('{day}', day)
-      .replaceAll('{time}', time)
-      .replaceAll('{note}', note)
-      .replaceAll('{reviewUrl}', reviewUrl)
-      .trim();
+  // Empty maps avoids Google Maps link-preview cards in WhatsApp.
+  final maps = includeMaps ? evo.googleMapsUrl.trim() : '';
+  return sanitizeWhatsAppText(
+    raw
+        .replaceAll('{name}', name.trim().isEmpty ? 'ji' : name.trim())
+        .replaceAll('{clinic}', clinic)
+        .replaceAll('{phone}', phone)
+        .replaceAll('{address}', address)
+        .replaceAll('{maps}', maps)
+        .replaceAll('{date}', date)
+        .replaceAll('{day}', day)
+        .replaceAll('{time}', time)
+        .replaceAll('{note}', note.trim())
+        .replaceAll('{reviewUrl}', reviewUrl),
+  );
 }
 
 const _months = [
@@ -398,10 +491,34 @@ void persistWhatsAppTemplates(WhatsAppTemplates templates) {
   }));
 }
 
+void resetWhatsAppTemplatesToDefaults() {
+  final campaigns = loadWhatsAppTemplates().campaigns;
+  persistWhatsAppTemplates(
+    WhatsAppTemplates.defaults().withCampaigns(campaigns),
+  );
+  globalSettings.set(Setting.fromJson({
+    'id': WhatsAppTemplateIds.versionId,
+    'value': '${WhatsAppTemplateIds.templatesVersion}',
+  }));
+}
+
 void ensureWhatsAppTemplates() {
   final raw = globalSettings.get(WhatsAppTemplateIds.settingId).value;
   var templates = WhatsAppTemplates.fromJsonString(raw);
   var changed = raw.trim().isEmpty;
+
+  final ver = int.tryParse(
+          globalSettings.get(WhatsAppTemplateIds.versionId).value.trim()) ??
+      0;
+  if (ver < WhatsAppTemplateIds.templatesVersion) {
+    // Keep custom campaign drafts; refresh official canned copy.
+    templates = WhatsAppTemplates.defaults().withCampaigns(templates.campaigns);
+    changed = true;
+    globalSettings.set(Setting.fromJson({
+      'id': WhatsAppTemplateIds.versionId,
+      'value': '${WhatsAppTemplateIds.templatesVersion}',
+    }));
+  }
 
   for (final id in WhatsAppTemplateIds.allIds) {
     final n = notes.get(id);
@@ -451,11 +568,17 @@ void ensureWhatsAppTemplates() {
 Map<String, String> get _defaultBodies => {
       WhatsAppTemplateIds.welcome: _welcomeBody.trim(),
       WhatsAppTemplateIds.confirm: _confirmBody.trim(),
+      WhatsAppTemplateIds.welcomeConfirm: _welcomeConfirmBody.trim(),
       WhatsAppTemplateIds.history: _historyBody.trim(),
       WhatsAppTemplateIds.aftercare: _aftercareBody.trim(),
       WhatsAppTemplateIds.remind: _remindBody.trim(),
       WhatsAppTemplateIds.birthday: _birthdayBody.trim(),
       WhatsAppTemplateIds.review: _reviewBody.trim(),
+      WhatsAppTemplateIds.noShow: _noShowBody.trim(),
+      WhatsAppTemplateIds.reschedule: _rescheduleBody.trim(),
+      WhatsAppTemplateIds.prescription: _prescriptionBody.trim(),
+      WhatsAppTemplateIds.leave: _leaveBody.trim(),
+      WhatsAppTemplateIds.nextBrief: _nextBriefBody.trim(),
       WhatsAppTemplateIds.alertNew: _alertNewBody.trim(),
       WhatsAppTemplateIds.alertBack: _alertBackBody.trim(),
       WhatsAppTemplateIds.optOut: _optOutBody.trim(),

@@ -1,6 +1,7 @@
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/leads/clinic_hours.dart';
+import 'package:chatdent/features/leads/clinic_whatsapp.dart';
 import 'package:chatdent/features/leads/lead_model.dart';
 import 'package:chatdent/features/leads/leads_store.dart';
 import 'package:chatdent/features/leads/slot_engine.dart';
@@ -83,6 +84,7 @@ class BookingService {
       'title': lead.title,
       if (lead.phonesString.isNotEmpty) 'phone': lead.phonesString,
       if (lead.email.isNotEmpty) 'email': lead.email,
+      'intakeSource': PatientIntakeSource.phoneCall,
       'notes': [
         if (lead.source.isNotEmpty) 'Lead source: ${lead.source}',
         if (lead.campaign.isNotEmpty) 'Campaign: ${lead.campaign}',
@@ -117,6 +119,10 @@ class BookingService {
     }
 
     final patient = ensurePatient(lead);
+    if (patient.intakeSource != PatientIntakeSource.phoneCall) {
+      patient.intakeSource = PatientIntakeSource.phoneCall;
+      patients.set(patient);
+    }
     final operatorIds = op.isNotEmpty
         ? [op]
         : (login.currentAccountID.isNotEmpty ? [login.currentAccountID] : <String>[]);
@@ -139,8 +145,11 @@ class BookingService {
     leads.set(lead);
 
     final name = lead.title.isEmpty ? patient.title : lead.title;
+    final useCombined = !patient.welcomeWhatsAppSent;
     final fromNote = filledWhatsAppNote(
-      WhatsAppTemplateIds.confirm,
+      useCombined
+          ? WhatsAppTemplateIds.welcomeConfirm
+          : WhatsAppTemplateIds.confirm,
       name: name,
       when: slot.start,
     );
@@ -155,6 +164,12 @@ class BookingService {
     final e164 = digits.length == 10 ? '91$digits' : lead.phonesString;
     final url =
         'https://wa.me/$e164?text=${Uri.encodeComponent(text)}';
+
+    patient.welcomeWhatsAppSent = true;
+    appointment.confirmWhatsAppSent = true;
+    patients.set(patient);
+    appointments.set(appointment);
+    ClinicWhatsApp.sendText(number: e164, text: text);
 
     return BookSlotResult(
       appointment: appointment,

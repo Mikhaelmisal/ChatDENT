@@ -1,3 +1,15 @@
+### ____0.10.2____
+
+- New Features & Enhancements
+    - **Prescriptions**: Medicine catalog, appointment prescription tab, patient prescriptions view, and WhatsApp prescription send.
+    - **WhatsApp leave flow**: Combined welcome + Rx + thank-you when a walk-in visit is marked done (no maps); brief next-appointment message ~18 minutes later; distinct day-before reminder copy.
+    - **Clinic banner**: Prefer flyer/marketing image instead of Google Maps link previews; ASCII-safe templates to avoid mojibake.
+    - **WhatsApp hold**: Pause outbound messages for a patient without deleting them; archived/deleted patients are skipped.
+    - **Permanent delete**: Delete forever from archived items / panel, gated by a 4-digit passcode (default `1234`, changeable in Settings).
+
+- Bug Fixes
+    - Treat PocketBase 404 on permanent delete as success so deferred deletes do not retry and spam logs.
+
 ### ____0.10.1____
 
 - ChatDENT 0.10.1 clinic release: branding, WhatsApp/leads tooling, Android package `app.chatdent.mobile`.

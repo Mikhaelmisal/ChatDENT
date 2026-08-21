@@ -1,4 +1,4 @@
-﻿/// Shared helpers for leads_booking.pb.js (loaded via require).
+/// Shared helpers for leads_booking.pb.js (loaded via require).
 
 var _b = {}
 
@@ -332,10 +332,28 @@ _b.fillMessage = function (tpl, fields) {
   const keys = ["name", "clinic", "phone", "address", "maps", "date", "day", "time", "note", "reviewUrl"]
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i]
-    const v = fields && fields[k] != null ? String(fields[k]) : ""
+    let v = fields && fields[k] != null ? String(fields[k]) : ""
+    // WhatsApp bold clinic name so branding stands out in every canned message.
+    if (k === "clinic" && v && v.indexOf("*") < 0) v = "*" + v + "*"
+    // Never inject Maps URLs — WhatsApp shows a Google preview card that
+    // replaces the clinic banner. Use a flyer/image send instead.
+    if (k === "maps") v = ""
     s = s.split("{" + k + "}").join(v)
   }
+  // Avoid mojibake from fancy dashes / bullets on some gateways.
+  s = s.replace(/[\u2014\u2013]/g, "-")
+  s = s.replace(/[\u2018\u2019]/g, "'")
+  s = s.replace(/[\u201c\u201d]/g, '"')
+  s = s.replace(/\u2022/g, "-")
+  s = s.replace(/\u00a0/g, " ")
   return s.trim()
+}
+
+_b.canMessagePatient = function (p) {
+  if (!p) return false
+  if (p.archived === true) return false
+  if (p.whatsappHold === true) return false
+  return true
 }
 
 _b.fillTemplate = function (tpl, name, clinic, whenMs) {
@@ -810,6 +828,7 @@ _b.dueBirthdays = function (withinDays) {
   for (let i = 0; i < patients.length; i++) {
     const p = patients[i]
     if (p.archived === true) continue
+    if (!_b.canMessagePatient(p)) continue
     if (!p.phone) continue
     const days = _b.daysUntilBirthday(p.birth, now)
     if (days == null || days > withinDays) continue
@@ -839,6 +858,7 @@ _b.dueReviews = function () {
   for (let i = 0; i < patients.length; i++) {
     const p = patients[i]
     if (p.archived === true || p.reviewDone === true || !p.phone) continue
+    if (!_b.canMessagePatient(p)) continue
     if (!doneByPatient[p.id]) continue
     const count = p.reviewAskCount || 0
     if (count >= 3) continue

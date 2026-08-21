@@ -8,13 +8,14 @@ import 'package:chatdent/core/model.dart';
 import 'package:chatdent/features/accounts/accounts_controller.dart';
 import 'package:chatdent/services/login.dart';
 import 'package:chatdent/utils/color_based_on_payment.dart';
+import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/features/appointments/open_appointment_panel.dart';
 import 'package:chatdent/common_widgets/item_title.dart';
 import 'package:chatdent/common_widgets/grid_gallery.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
-import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
+import 'package:chatdent/features/prescriptions/prescription_line.dart';
 import 'package:chatdent/utils/constants.dart';
 import 'package:chatdent/utils/logger.dart';
 import 'package:chatdent/widget_keys.dart';
@@ -317,7 +318,10 @@ class AppointmentCard extends StatelessWidget {
                           _buildSection(
                               txt("prescription"),
                               Txt(
-                                appointment.prescriptions.join("\n"),
+                                appointment.prescriptions
+                                    .map((p) =>
+                                        PrescriptionLine.parse(p).toDisplay())
+                                    .join("\n"),
                                 style: const TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.w500),
                               ),

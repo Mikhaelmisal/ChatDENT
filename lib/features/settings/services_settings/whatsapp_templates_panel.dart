@@ -20,11 +20,17 @@ class _WhatsAppTemplatesPanelState extends State<WhatsAppTemplatesPanel> {
   static const _labelKeys = {
     WhatsAppTemplateIds.welcome: 'tplWelcome',
     WhatsAppTemplateIds.confirm: 'whatsappConfirmTemplate',
+    WhatsAppTemplateIds.welcomeConfirm: 'tplWelcomeConfirm',
     WhatsAppTemplateIds.history: 'tplHistory',
     WhatsAppTemplateIds.aftercare: 'tplAftercare',
     WhatsAppTemplateIds.remind: 'whatsappRemindTemplate',
     WhatsAppTemplateIds.birthday: 'birthdayTemplate',
     WhatsAppTemplateIds.review: 'reviewTemplate',
+    WhatsAppTemplateIds.noShow: 'tplNoShow',
+    WhatsAppTemplateIds.reschedule: 'tplReschedule',
+    WhatsAppTemplateIds.prescription: 'tplPrescription',
+    WhatsAppTemplateIds.leave: 'tplLeave',
+    WhatsAppTemplateIds.nextBrief: 'tplNextBrief',
     WhatsAppTemplateIds.alertNew: 'tplAlertNew',
     WhatsAppTemplateIds.alertBack: 'tplAlertBack',
     WhatsAppTemplateIds.optOut: 'tplOptOut',
@@ -97,9 +103,26 @@ class _WhatsAppTemplatesPanelState extends State<WhatsAppTemplatesPanel> {
                 txt('templatePlaceholders'),
                 style: FluentTheme.of(context).typography.caption,
               ),
-              FilledButton(
-                onPressed: _save,
-                child: ButtonContent(WindowsIcons.save, txt('save')),
+              Row(
+                children: [
+                  FilledButton(
+                    onPressed: _save,
+                    child: ButtonContent(WindowsIcons.save, txt('save')),
+                  ),
+                  const SizedBox(width: 8),
+                  Button(
+                    onPressed: () {
+                      resetWhatsAppTemplatesToDefaults();
+                      templates = loadWhatsAppTemplates();
+                      _body.text = templates.bodyOf(_id);
+                      setState(() {});
+                    },
+                    child: ButtonContent(
+                      FluentIcons.reset,
+                      txt('resetDefaults'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

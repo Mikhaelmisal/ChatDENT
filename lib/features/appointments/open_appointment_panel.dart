@@ -10,7 +10,11 @@ import 'package:chatdent/common_widgets/teeth_selector/teeth_selector.dart';
 import 'package:chatdent/common_widgets/teeth_selector/tx_options.dart';
 import 'package:chatdent/core/observable.dart';
 import 'package:chatdent/features/labwork/open_labwork_panel.dart';
+import 'package:chatdent/features/leads/clinic_whatsapp.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
+import 'package:chatdent/features/patients/patients_store.dart';
+import 'package:chatdent/features/prescriptions/add_prescription_dialog.dart';
+import 'package:chatdent/features/prescriptions/prescription_line.dart';
 import 'package:chatdent/services/ai_services/post_op_notes.dart';
 import 'package:chatdent/common_widgets/live_transcribing_textfield.dart';
 import 'package:chatdent/services/login.dart';
@@ -69,7 +73,11 @@ void openAppointment([Appointment? appointment, int? selectedTabIndex]) {
   }
 
   final editingCopy = Appointment.fromJson(appointment?.toJson() ?? {});
-  final panel = Panel(
+  final previous = appointments.get(editingCopy.id) == null
+      ? null
+      : Appointment.fromJson(appointment!.toJson());
+  late final Panel<Appointment> panel;
+  panel = Panel<Appointment>(
     singularName: "appointment",
     unicodeSymbol: "📅",
     selectedTabIndex: selectedTabIndex,
@@ -79,6 +87,93 @@ void openAppointment([Appointment? appointment, int? selectedTabIndex]) {
     title: appointments.get(editingCopy.id) == null
         ? txt("addAppointment")
         : editingCopy.title,
+    onSave: () {
+      final wasNew = previous == null;
+      final dateChanged = previous != null &&
+          previous.date.millisecondsSinceEpoch !=
+              editingCopy.date.millisecondsSinceEpoch;
+      final becameDone = editingCopy.isDone && previous?.isDone != true;
+      final becameNoShow =
+          editingCopy.isNoShow && previous?.isNoShow != true;
+
+      if (editingCopy.isNoShow) {
+        editingCopy.isDone = false;
+      }
+      if (editingCopy.isDone) {
+        editingCopy.isNoShow = false;
+      }
+
+      appointments.set(editingCopy);
+      panel.savedJson = jsonEncode(editingCopy.toJson());
+      panel.identifier = editingCopy.id;
+      if (!panel.result.isCompleted) {
+        panel.result.complete(editingCopy);
+      }
+
+      final patient = editingCopy.patientID == null
+          ? null
+          : patients.get(editingCopy.patientID!);
+      if (patient == null || patient.phonesString.trim().isEmpty) return;
+
+      if (becameNoShow && !editingCopy.noShowWhatsAppSent) {
+        editingCopy.noShowWhatsAppSent = true;
+        appointments.set(editingCopy);
+        panel.savedJson = jsonEncode(editingCopy.toJson());
+        ClinicWhatsApp.sendNoShow(
+          appointment: editingCopy,
+          patient: patient,
+        );
+        return;
+      }
+
+      if (becameDone && !editingCopy.aftercareWhatsAppSent) {
+        editingCopy.aftercareWhatsAppSent = true;
+        appointments.set(editingCopy);
+        panel.savedJson = jsonEncode(editingCopy.toJson());
+        ClinicWhatsApp.sendTreatmentDone(
+          appointment: editingCopy,
+          patient: patient,
+        );
+        return;
+      }
+
+      if ((wasNew || dateChanged) &&
+          !editingCopy.isNoShow &&
+          !editingCopy.isDone) {
+        // Walk-ins and same-day post-visit patients: no confirm spam.
+        // Phone-call bookings still get confirm / welcome+confirm.
+        final skipConfirm =
+            patient.intakeSource == PatientIntakeSource.walkIn ||
+                ClinicWhatsApp.hadPostVisitWhatsAppToday(patient);
+        if (wasNew && !editingCopy.confirmWhatsAppSent && !skipConfirm) {
+          editingCopy.confirmWhatsAppSent = true;
+          final useWelcomeConfirm = !patient.welcomeWhatsAppSent &&
+              patient.intakeSource == PatientIntakeSource.phoneCall;
+          if (useWelcomeConfirm) {
+            patient.welcomeWhatsAppSent = true;
+            patients.set(patient);
+          }
+          appointments.set(editingCopy);
+          panel.savedJson = jsonEncode(editingCopy.toJson());
+          ClinicWhatsApp.sendAppointmentBooked(
+            appointment: editingCopy,
+            patient: patient,
+            useWelcomeConfirm: useWelcomeConfirm,
+          );
+        } else if (wasNew && skipConfirm) {
+          // Mark confirm as handled so we never backfill spam later.
+          editingCopy.confirmWhatsAppSent = true;
+          appointments.set(editingCopy);
+          panel.savedJson = jsonEncode(editingCopy.toJson());
+        } else if (dateChanged) {
+          appointments.set(editingCopy);
+          ClinicWhatsApp.sendReschedule(
+            appointment: editingCopy,
+            patient: patient,
+          );
+        }
+      }
+    },
     tabs: [],
   );
   final tabs = [
@@ -146,6 +241,11 @@ void openAppointment([Appointment? appointment, int? selectedTabIndex]) {
               )
             : null,
       ),
+    PanelTab(
+      title: txt("prescription"),
+      icon: FluentIcons.pill,
+      body: _PrescriptionDetails(editingCopy),
+    ),
     PanelTab(
       title: txt("gallery"),
       icon: FluentIcons.camera,
@@ -609,51 +709,6 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
               _buildOtherAppointmentsFlyout(context),
           ],
         ),
-        InfoLabel(
-          label: "${txt("prescription")}:",
-          child: TagInputWidget(
-            key: WK.fieldAppointmentPrescriptions,
-            suggestions: appointments.allPrescriptions
-                .map((p) => TagInputItem(value: p, label: p))
-                .toList(),
-            onChanged: (s) {
-              setState(() {
-                widget.appointment.prescriptions = s
-                    .where((x) => x.value != null)
-                    .map((x) => x.value!)
-                    .toList();
-                widget.appointment.isDone = true;
-              });
-            },
-            initialValue: widget.appointment.prescriptions
-                .map((p) => TagInputItem(value: p, label: p))
-                .toList(),
-            strict: false,
-            limit: 999,
-            placeholder: "${txt("prescription")}...",
-            multiline: true,
-          ),
-        ),
-        if (widget.appointment.prescriptions.isNotEmpty)
-          FilledButton(
-              style: filledButtonStyle(Colors.grey),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(FluentIcons.print),
-                  const SizedBox(width: 10),
-                  Txt(txt("printPrescription"))
-                ],
-              ),
-              onPressed: () {
-                printingPrescription(
-                  context,
-                  widget.appointment.prescriptions,
-                  widget.appointment.patient?.title ?? "",
-                  widget.appointment.patient?.age.toString() ?? "",
-                  widget.appointment.patient?.link ?? "",
-                );
-              }),
         const Divider(direction: Axis.horizontal),
         Row(
           children: [
@@ -728,9 +783,24 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
           onChanged: (checked) {
             setState(() {
               widget.appointment.isDone = checked == true;
+              if (widget.appointment.isDone) {
+                widget.appointment.isNoShow = false;
+              }
             });
           },
           content: Txt(txt("isDone")),
+        ),
+        Checkbox(
+          checked: widget.appointment.isNoShow,
+          onChanged: (checked) {
+            setState(() {
+              widget.appointment.isNoShow = checked == true;
+              if (widget.appointment.isNoShow) {
+                widget.appointment.isDone = false;
+              }
+            });
+          },
+          content: Txt(txt("isNoShow")),
         ),
         widget.appointment.hasLabwork
             ? _buildLabworkSection()
@@ -779,6 +849,131 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
             widget.appointment.hasLabwork = false;
           });
         });
+  }
+}
+
+class _PrescriptionDetails extends StatefulWidget {
+  final Appointment appointment;
+  const _PrescriptionDetails(this.appointment);
+
+  @override
+  State<_PrescriptionDetails> createState() => _PrescriptionDetailsState();
+}
+
+class _PrescriptionDetailsState extends State<_PrescriptionDetails> {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoBar(
+          title: Txt(txt('prescriptionsTabInfo')),
+          action: Button(
+            onPressed: () {
+              routes.navigate('prescriptions');
+            },
+            child: Txt(txt('openPrescriptionsCatalog')),
+          ),
+        ),
+        const SizedBox(height: 12),
+        InfoLabel(
+          label: "${txt("prescription")}:",
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final raw in widget.appointment.prescriptions)
+                Button(
+                  onPressed: null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Txt(
+                          PrescriptionLine.parse(raw).toDisplay(),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(FluentIcons.cancel, size: 12),
+                        onPressed: () {
+                          setState(() {
+                            widget.appointment.prescriptions = List<String>.from(
+                                widget.appointment.prescriptions)
+                              ..remove(raw);
+                            widget.appointment.isDone = true;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              Button(
+                onPressed: () async {
+                  final line = await showAddPrescriptionDialog(context);
+                  if (line == null || !mounted) return;
+                  setState(() {
+                    widget.appointment.prescriptions = [
+                      ...widget.appointment.prescriptions,
+                      line,
+                    ];
+                    widget.appointment.isDone = true;
+                  });
+                },
+                child: ButtonContent(
+                  WindowsIcons.add,
+                  txt('addPrescription'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (widget.appointment.prescriptions.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                style: filledButtonStyle(Colors.grey),
+                child: ButtonContent(
+                  FluentIcons.print,
+                  txt("printPrescription"),
+                ),
+                onPressed: () {
+                  printingPrescription(
+                    context,
+                    widget.appointment.prescriptions
+                        .map((p) => PrescriptionLine.parse(p).toDisplay())
+                        .toList(),
+                    widget.appointment.patient?.title ?? "",
+                    widget.appointment.patient?.age.toString() ?? "",
+                    widget.appointment.patient?.link ?? "",
+                  );
+                },
+              ),
+              Button(
+                child: ButtonContent(
+                  FluentIcons.office_chat,
+                  txt('sendOnWhatsApp'),
+                ),
+                onPressed: () {
+                  final patient = widget.appointment.patientID == null
+                      ? null
+                      : patients.get(widget.appointment.patientID!);
+                  if (patient == null) return;
+                  ClinicWhatsApp.sendPrescription(
+                    appointment: widget.appointment,
+                    patient: patient,
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/item_title.dart';
+import 'package:chatdent/common_widgets/permanent_delete.dart';
 import 'package:chatdent/common_widgets/screen_command_bar.dart';
 import 'package:chatdent/common_widgets/show_more_bar.dart';
 import 'package:chatdent/core/model.dart';
@@ -53,6 +54,7 @@ class _ArchivedPage extends StatefulWidget {
 
 class _ArchivedRow {
   final Model item;
+  final Store store;
   final String storeLabel;
   final Color storeColor;
   final IconData storeIcon;
@@ -62,6 +64,7 @@ class _ArchivedRow {
 
   const _ArchivedRow({
     required this.item,
+    required this.store,
     required this.storeLabel,
     required this.storeColor,
     required this.storeIcon,
@@ -177,6 +180,7 @@ class _ArchivedPageState extends State<_ArchivedPage> {
         final g = p.gender == 1 ? txt("male") : txt("female");
         return _ArchivedRow(
           item: p,
+          store: patients,
           storeLabel: txt("patients"),
           storeColor: Colors.blue,
           storeIcon: FluentIcons.medication_admin,
@@ -191,6 +195,7 @@ class _ArchivedPageState extends State<_ArchivedPage> {
         final ops = a.operatorsNames;
         return _ArchivedRow(
           item: a,
+          store: appointments,
           storeLabel: txt("appointments"),
           storeColor: Colors.green,
           storeIcon: WindowsIcons.calendar,
@@ -203,6 +208,7 @@ class _ArchivedPageState extends State<_ArchivedPage> {
 
         return _ArchivedRow(
           item: e,
+          store: expenses,
           storeLabel: txt("expenses"),
           storeColor: Colors.orange,
           storeIcon: FluentIcons.receipt_processing,
@@ -223,6 +229,7 @@ class _ArchivedPageState extends State<_ArchivedPage> {
         final l = leads.get(key[0])!;
         return _ArchivedRow(
           item: l,
+          store: leads,
           storeLabel: txt("leads"),
           storeColor: Colors.teal,
           storeIcon: FluentIcons.people,
@@ -240,6 +247,7 @@ class _ArchivedPageState extends State<_ArchivedPage> {
               ? Model.fromJson(
                   {"title": n.columnName, "archived": true, "id": n.id})
               : n,
+          store: notes,
           storeLabel: txt("notes"),
           storeColor: Colors.purple,
           storeIcon: WindowsIcons.quick_note,
@@ -259,6 +267,20 @@ class _ArchivedPageState extends State<_ArchivedPage> {
       if (_selected.contains(key[0])) {
         _rowForKey(key).onRestore();
       }
+    }
+    _collectionCache = {};
+    _selected.clear();
+    _rebuild();
+  }
+
+  Future<void> _deleteSelectedForever() async {
+    if (_selected.isEmpty) return;
+    final ok = await confirmPermanentDeletePasscode(context);
+    if (!ok || !mounted) return;
+    for (final key in _sortKeys) {
+      if (!_selected.contains(key[0])) continue;
+      final row = _rowForKey(key);
+      await row.store.permanentDelete(row.item.id);
     }
     _collectionCache = {};
     _selected.clear();
@@ -334,6 +356,20 @@ class _ArchivedPageState extends State<_ArchivedPage> {
         ),
         onPressed: _selected.isNotEmpty ? _restoreSelected : null,
       ),
+      otherButtons: [
+        IconButton(
+          style: ButtonStyle(
+            backgroundColor:
+                WidgetStatePropertyAll(Colors.red.withValues(alpha: 0.85)),
+            foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          ),
+          icon: ButtonContent(
+            WindowsIcons.delete,
+            '${txt("deleteForever")} ($count)',
+          ),
+          onPressed: _selected.isNotEmpty ? _deleteSelectedForever : null,
+        ),
+      ],
     );
   }
 

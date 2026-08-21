@@ -229,6 +229,36 @@ class SaveRemote {
     return true;
   }
 
+  /// Hard-deletes rows from the PocketBase `data` collection.
+  ///
+  /// A 404 means the row is already gone — that is treated as success so
+  /// deferred permanent-deletes do not retry forever and spam the log.
+  Future<void> deleteIds(List<String> ids) async {
+    final valid = ids.where(isPocketBaseRecordId).toList();
+    if (valid.isEmpty) return;
+    for (final id in valid) {
+      try {
+        await remoteRows.delete(id);
+      } on ClientException catch (e) {
+        if (isAlreadyGone(e)) continue;
+        await checkOnline();
+        rethrow;
+      } catch (e) {
+        await checkOnline();
+        rethrow;
+      }
+    }
+  }
+
+  static bool isAlreadyGone(ClientException e) {
+    if (e.statusCode == 404) return true;
+    final raw = e.response.toString().toLowerCase();
+    return raw.contains('status: 404') ||
+        raw.contains('"status":404') ||
+        raw.contains("wasn't found") ||
+        raw.contains('was not found');
+  }
+
   Future<List<String>> _findDuplicates(String rowID, String filename,
       [bool allowPngExtensionToo = false]) async {
     final extension = p.extension(filename).toLowerCase();
