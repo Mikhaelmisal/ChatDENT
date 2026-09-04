@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/dialogs/dialog_styling.dart';
 import 'package:chatdent/common_widgets/language_picker.dart';
@@ -39,7 +40,9 @@ class _PatientSideScreenState extends State<PatientSideScreen> {
     final totalPaid = appointments.fold(0.0, (s, a) => s + a.paid);
     final balance = totalPrice - totalPaid;
 
-    return Column(
+    return ColoredBox(
+      color: ChatDentPalette.of(context).canvas,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── Hero Header ──────────────────────────────────────────────────────
@@ -58,7 +61,9 @@ class _PatientSideScreenState extends State<PatientSideScreen> {
         // ── Tab bar ──────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _TabChip(
                 label: txt("appointments"),
@@ -94,6 +99,7 @@ class _PatientSideScreenState extends State<PatientSideScreen> {
                 ),
         ),
       ],
+      ),
     );
   }
 }
@@ -163,12 +169,11 @@ class _HeroHeaderState extends State<_HeroHeader> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(FluentIcons.hospital,
                         color: Colors.white, size: 14),
                     const SizedBox(width: 8),
-                    Flexible(
+                    Expanded(
                       child: Text(
                         widget.clinicNameAndAddress.split('\n').first,
                         maxLines: 1,
@@ -477,19 +482,17 @@ class _TabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
+    final p = ChatDentPalette.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? theme.accentColor : Colors.transparent,
+          color: selected ? p.fluentBlue : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? theme.accentColor
-                : theme.resources.controlStrokeColorDefault,
+            color: selected ? p.fluentBlue : p.border,
           ),
         ),
         child: Row(
@@ -498,19 +501,16 @@ class _TabChip extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: selected
-                  ? Colors.white
-                  : theme.resources.textFillColorPrimary,
+              color: selected ? p.card : p.stone,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
+                fontFamily: ChatDentFonts.ui,
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                color: selected
-                    ? Colors.white
-                    : theme.resources.textFillColorPrimary,
+                color: selected ? p.card : p.stone,
               ),
             ),
           ],
@@ -674,18 +674,18 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(10),
+                  decoration: chatDentInnerCard(ChatDentPalette.of(context)).copyWith(
                     border: Border.all(
                       color: widget.isFirst
-                          ? theme.accentColor.withAlpha(120)
-                          : theme.resources.controlStrokeColorDefault,
+                          ? ChatDentPalette.of(context).fluentBlue.withAlpha(120)
+                          : ChatDentPalette.of(context).border,
                     ),
                     boxShadow: widget.isFirst
                         ? [
                             BoxShadow(
-                              color: theme.accentColor.withAlpha(30),
+                              color: ChatDentPalette.of(context)
+                                  .fluentBlue
+                                  .withAlpha(30),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             )
@@ -698,7 +698,10 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                       // Header row (always visible)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                        child: Row(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Icon(
                               WindowsIcons.calendar,
@@ -738,13 +741,11 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                                   size: 14, color: Colors.successPrimaryColor),
                             ],
                             if (apt.archived) ...[
-                              const SizedBox(width: 8),
                               Icon(WindowsIcons.delete,
                                   size: 14,
                                   color:
                                       theme.resources.textFillColorSecondary),
                             ],
-                            const Spacer(),
                             // Pay badge
                             if (apt.isDone)
                               Container(

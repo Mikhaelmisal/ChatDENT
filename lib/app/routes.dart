@@ -188,7 +188,7 @@ class _Routes {
             title: txt("patients"),
             identifier: "patients",
             navbarTitle: txt("patients"),
-            icon: FluentIcons.medication_admin,
+            icon: FluentIcons.people,
             screen: PatientsScreen.new,
             accessible: login.perm(Perm.patients).some || login.isAdmin,
             onSelect: () async {
@@ -202,7 +202,7 @@ class _Routes {
             title: txt("leads"),
             identifier: "leads",
             navbarTitle: txt("leads"),
-            icon: FluentIcons.people,
+            icon: FluentIcons.bullseye_target,
             screen: LeadsScreen.new,
             accessible: login.perm(Perm.leads).some || login.isAdmin,
             onSelect: () async {
@@ -217,7 +217,7 @@ class _Routes {
             title: txt("outreachDashboard"),
             identifier: "outreach",
             navbarTitle: txt("outreachDashboard"),
-            icon: FluentIcons.birthday_cake,
+            icon: FluentIcons.megaphone,
             screen: OutreachScreen.new,
             accessible: login.perm(Perm.leads).some || login.isAdmin,
             onSelect: () async {
@@ -231,7 +231,7 @@ class _Routes {
             title: txt("appointments"),
             identifier: "calendar",
             navbarTitle: txt("calendar"),
-            icon: WindowsIcons.calendar,
+            icon: FluentIcons.calendar,
             screen: CalendarScreen.new,
             accessible: login.perm(Perm.appointments).some || login.isAdmin,
             onSelect: () async {
@@ -248,7 +248,7 @@ class _Routes {
             title: txt("labworks"),
             identifier: "labworks",
             navbarTitle: txt("labworks"),
-            icon: FluentIcons.manufacturing,
+            icon: FluentIcons.repair,
             screen: LabworksScreen.new,
             accessible: login.perm(Perm.appointments).some || login.isAdmin,
             onSelect: () async {
@@ -262,7 +262,7 @@ class _Routes {
             title: txt("prescriptions"),
             identifier: "prescriptions",
             navbarTitle: txt("prescriptions"),
-            icon: FluentIcons.medical,
+            icon: FluentIcons.pill,
             screen: PrescriptionsScreen.new,
             accessible: login.perm(Perm.appointments).some || login.isAdmin,
             onSelect: () async {
@@ -273,7 +273,7 @@ class _Routes {
           title: txt("notes"),
           identifier: "notes",
           navbarTitle: txt("notes"),
-          icon: WindowsIcons.quick_note,
+          icon: FluentIcons.document,
           screen: NotesScreen.new,
           onSelect: () async {
             await accounts.reloadFromRemote();
@@ -287,7 +287,7 @@ class _Routes {
             title: txt("expenses"),
             identifier: "expenses",
             navbarTitle: txt("expenses"),
-            icon: FluentIcons.receipt_processing,
+            icon: FluentIcons.payment_card,
             screen: ExpensesScreen.new,
             accessible: login.perm(Perm.expenses).some || login.isAdmin,
             onSelect: () async {
@@ -301,7 +301,7 @@ class _Routes {
             title: txt("insights"),
             identifier: "insights",
             navbarTitle: txt("insights"),
-            icon: FluentIcons.chart,
+            icon: FluentIcons.pie_single,
             screen: StatsScreen.new,
             accessible: login.perm(Perm.stats).some || login.isAdmin,
             onSelect: () async {
@@ -320,7 +320,7 @@ class _Routes {
             title: txt("accounts"),
             identifier: "accounts",
             navbarTitle: txt("accounts"),
-            icon: FluentIcons.people,
+            icon: FluentIcons.org,
             screen: AccountsScreen.new,
             accessible: login.isAdmin,
             onSelect: () {},
@@ -363,7 +363,7 @@ class _Routes {
           icon: FluentIcons.settings,
           screen: SettingsScreen.new,
           accessible: true,
-          onFooter: false,
+          onFooter: true,
           onSelect: () {
             globalSettings.synchronize();
             backups.reloadFromRemote();

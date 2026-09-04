@@ -97,18 +97,16 @@ class Appointment extends Model {
   }
 
   bool get isLaboworkUndelivered {
-    return hasLabwork &&
-        labworkReceived &&
-        patient != null &&
-        patient!.doneAppointments.isNotEmpty &&
-        patient!.doneAppointments.last.id == id;
+    if (!hasLabwork || !labworkReceived) return false;
+    if (patient == null || patient!.allAppointments.isEmpty) return true;
+    return patient!.allAppointments.last.id == id;
   }
 
   String get labworkStatus {
     if (!hasLabwork) return "none";
+    if (!labworkReceived) return txt("waitingForLab");
     if (isLaboworkUndelivered) return txt("undelivered");
-    if (labworkReceived) return txt("receivedAndDelivered");
-    return txt("waitingForLab");
+    return txt("receivedAndDelivered");
   }
 
   List<String> get viewableImgs {
@@ -140,7 +138,7 @@ class Appointment extends Model {
   /* 14 */ String labworkNotes = "";
   /* 15 */ bool labworkReceived = false;
   /* 16 */ Map<String, String> drawings = {};
-  /* 17 */ int duration = 15; // in minutes, default 15
+  /* 17 */ int duration = 20; // minutes; 3 visits per hour
   /* 18 */ List<String> dcmImgs = []; // DICOM X-ray filenames
   /* 19 */ bool reminder24Sent = false;
   /* 20 */ bool reminder2Sent = false;

@@ -62,6 +62,9 @@ dist/
 # Local Sentry/runtime junk
 .sentry-native/
 
+# Superdesign temp HTML (never commit)
+.superdesign/tmp/
+
 # Large design / packaging blobs (keep local only)
 *.af
 store graphics new.af

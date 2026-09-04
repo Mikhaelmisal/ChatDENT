@@ -245,6 +245,35 @@ void main() {
           contains(received.id));
     });
 
+    test('a later appointment records delivery and clears pending', () async {
+      final p = testPatient(id: 'lab-pt-delivered');
+      patients.set(p);
+      injectedPatientIds.add(p.id);
+      final received = testAppointment(
+        id: 'lab-received-visit',
+        patientID: p.id,
+        date: DateTime(2025, 2, 2),
+        hasLabwork: true,
+        labworkReceived: true,
+      );
+      final deliveryVisit = testAppointment(
+        id: 'lab-delivery-visit',
+        patientID: p.id,
+        date: DateTime(2025, 2, 10),
+        hasLabwork: false,
+      );
+      appointments.setAll([received, deliveryVisit]);
+      injectedApptIds.addAll([received.id, deliveryVisit.id]);
+
+      await flushObservers();
+      await flushObservers();
+
+      expect(labworks.notDeliveredPatients.map((patient) => patient.id),
+          isNot(contains(p.id)));
+      expect(labworks.notDelivered.map((appointment) => appointment.id),
+          isNot(contains(received.id)));
+    });
+
     test('uses the latest appointment by date when deciding delivery',
         () async {
       final p = testPatient(id: 'lab-pt-latest-controls');

@@ -3,8 +3,9 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parent
 js = root / "js"
-TOKEN = "rlwqer5f50usxidldnhdzyg7"
+BOOKING_TOKEN = "={{ $env.N8N_BOOKING_TOKEN }}"
 PB = "http://pocketbase:8090"
+EVO_KEY = "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
 
 
 def code_node(name, nid, x, y, filename):
@@ -25,7 +26,7 @@ def http_get(name, nid, x, y, url):
             "url": url,
             "sendHeaders": True,
             "headerParameters": {
-                "parameters": [{"name": "X-Booking-Token", "value": TOKEN}]
+                "parameters": [{"name": "X-Booking-Token", "value": BOOKING_TOKEN}]
             },
             "options": {},
         },
@@ -45,7 +46,7 @@ def http_post_json(name, nid, x, y, url, json_body_expr):
             "sendHeaders": True,
             "headerParameters": {
                 "parameters": [
-                    {"name": "X-Booking-Token", "value": TOKEN},
+                    {"name": "X-Booking-Token", "value": BOOKING_TOKEN},
                     {"name": "Content-Type", "value": "application/json"},
                 ]
             },
@@ -72,7 +73,7 @@ def http_evo_send(name, nid, x, y):
                 "parameters": [
                     {
                         "name": "apikey",
-                        "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}",
+                        "value": EVO_KEY,
                     },
                     {"name": "Content-Type", "value": "application/json"},
                 ]
@@ -100,7 +101,7 @@ def http_evo_media(name, nid, x, y):
                 "parameters": [
                     {
                         "name": "apikey",
-                        "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}",
+                        "value": EVO_KEY,
                     },
                     {"name": "Content-Type", "value": "application/json"},
                 ]
@@ -175,7 +176,7 @@ booking = {
     "nodes": [
         {
             "parameters": {
-                "content": "## Do not activate\n\nThis old auto-book workflow is replaced by **ChatDENT WhatsApp assistant**.\nKeep it inactive so it does not steal the same webhook path.",
+                "content": "## Do not activate\n\nThis old auto-book workflow is replaced by **ChatDENT WhatsApp assistant**.\nWebhook path is chatdent-whatsapp-legacy so it cannot steal the live assistant webhook even if someone activates it.",
                 "height": 440,
                 "width": 380,
                 "color": 6,
@@ -189,7 +190,7 @@ booking = {
         {
             "parameters": {
                 "httpMethod": "POST",
-                "path": "chatdent-whatsapp",
+                "path": "chatdent-whatsapp-legacy",
                 "responseMode": "onReceived",
                 "options": {},
             },
@@ -198,7 +199,7 @@ booking = {
             "type": "n8n-nodes-base.webhook",
             "typeVersion": 2,
             "position": [0, 300],
-            "webhookId": "chatdent-whatsapp",
+            "webhookId": "chatdent-whatsapp-legacy",
         },
         code_node("Parse inbound", "code-parse", 240, 300, "parse_inbound.js"),
         {
@@ -334,7 +335,8 @@ reminders = {
             1120,
             320,
             PB + "/api/leads/mark-reminder",
-            "={{ JSON.stringify({ appointmentId: $json.appointmentId, kind: $json.kind }) }}",
+            # After Evolution send, $json is the API response — keep ids from the wait node.
+            "={{ JSON.stringify({ appointmentId: $('Wait before reminder').item.json.appointmentId, kind: $('Wait before reminder').item.json.kind }) }}",
         ),
     ],
     "connections": {
@@ -370,7 +372,7 @@ assistant = {
     "nodes": [
         {
             "parameters": {
-                "content": "## ChatDENT WhatsApp assistant (OpenRouter)\n\n1. OPENROUTER_API_KEY in D:\\ChatDENT\\.env and N8N_BLOCK_ENV_ACCESS_IN_NODE=false in docker-compose, then: docker compose up -d n8n --force-recreate\n2. Import this workflow. Keep **ChatDENT WhatsApp booking** inactive.\n3. Evolution webhook: `http://n8n:5678/webhook/chatdent-whatsapp` event messages.upsert instance `clinic_default`.\n4. Activate this workflow.\n\nCanned WhatsApp (welcome, confirm, reminder, birthday, review, group alerts, opt-out) comes from **WhatsApp templates** in ChatDENT. The AI only chats after the first welcome. It never books and never quotes fees.",
+                "content": "## ChatDENT WhatsApp assistant (OpenRouter)\n\n1. OPENROUTER_API_KEY in D:\\ChatDENT\\.env and N8N_BLOCK_ENV_ACCESS_IN_NODE=false in docker-compose, then: docker compose up -d n8n --force-recreate\n2. Import this workflow. Keep only this assistant active for the webhook.\n3. Evolution webhook: `http://n8n:5678/webhook/chatdent-whatsapp` event messages.upsert instance `clinic_default`.\n4. Activate this workflow.\n\nSkipped like groups: staff-group chats, status, protocol noise, and Meta Ads / Click-to-WhatsApp automated chat (no AI reply, no new-lead group alert).\n\nCanned WhatsApp (welcome, confirm, reminder, birthday, review, group alerts, opt-out) comes from **WhatsApp templates** in ChatDENT. The AI only chats after the first welcome. It never books and never quotes fees.",
                 "height": 520,
                 "width": 420,
                 "color": 6,
@@ -555,7 +557,21 @@ assistant = {
             3840,
             480,
             PB + "/api/leads/ai-event",
-            "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, appointmentId: $json.appointmentId, interest: $json.interest, leadId: $json.leadId }) }}",
+            "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, appointmentId: $json.appointmentId, interest: $json.interest, note: $json.note, preferredTime: $json.preferredTime, leadId: $json.leadId }) }}",
+        ),
+        code_node(
+            "Prepare reschedule group",
+            "code-resched-group",
+            4080,
+            480,
+            "prepare_reschedule_group.js",
+        ),
+        wait_seconds("Wait before reschedule group", "wait-resched-group", 4320, 480, 3),
+        http_evo_send(
+            "Send reschedule group alert",
+            "http-evo-resched-group",
+            4560,
+            480,
         ),
     ],
     "connections": {
@@ -649,19 +665,30 @@ assistant = {
             "main": [[{"node": "Send WhatsApp reply", "type": "main", "index": 0}]]
         },
         "Send WhatsApp reply": {
-            "main": [[{"node": "Attach flyer?", "type": "main", "index": 0}]]
+            "main": [
+                [
+                    {"node": "Attach flyer?", "type": "main", "index": 0},
+                    {"node": "Split AI events", "type": "main", "index": 0},
+                ]
+            ]
         },
         "Attach flyer?": {
             "main": [
                 [{"node": "Send flyer image", "type": "main", "index": 0}],
-                [{"node": "Split AI events", "type": "main", "index": 0}],
+                [],
             ]
-        },
-        "Send flyer image": {
-            "main": [[{"node": "Split AI events", "type": "main", "index": 0}]]
         },
         "Split AI events": {
             "main": [[{"node": "Record AI event", "type": "main", "index": 0}]]
+        },
+        "Record AI event": {
+            "main": [[{"node": "Prepare reschedule group", "type": "main", "index": 0}]]
+        },
+        "Prepare reschedule group": {
+            "main": [[{"node": "Wait before reschedule group", "type": "main", "index": 0}]]
+        },
+        "Wait before reschedule group": {
+            "main": [[{"node": "Send reschedule group alert", "type": "main", "index": 0}]]
         },
     },
 }
@@ -677,7 +704,7 @@ outreach = {
     "nodes": [
         {
             "parameters": {
-                "content": "## Birthdays + Google reviews\n\nDaily 09:00: birthday WhatsApp (once per year).\nEvery 6 hours: review request after a completed visit, max 3 times, ~2 days apart.\nMessages go only to that patient's number.",
+                "content": "## Birthdays\n\nClinic-local 09:00 (workflow timezone Asia/Kolkata): birthday WhatsApp once per clinic year.\nGoogle review requests are sent only from ChatDENT → patient details (treatment completed + Send review request).",
                 "height": 280,
                 "width": 360,
                 "color": 4,
@@ -690,23 +717,22 @@ outreach = {
         },
         {
             "parameters": {
-                "rule": {"interval": [{"field": "hours", "hoursInterval": 24}]}
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "days",
+                            "daysInterval": 1,
+                            "triggerAtHour": 9,
+                            "triggerAtMinute": 0,
+                        }
+                    ]
+                }
             },
             "id": "sched-bday",
             "name": "Daily 9am",
             "type": "n8n-nodes-base.scheduleTrigger",
             "typeVersion": 1.2,
             "position": [0, 200],
-        },
-        {
-            "parameters": {
-                "rule": {"interval": [{"field": "hours", "hoursInterval": 6}]}
-            },
-            "id": "sched-rev",
-            "name": "Every 6 hours",
-            "type": "n8n-nodes-base.scheduleTrigger",
-            "typeVersion": 1.2,
-            "position": [0, 480],
         },
         http_get(
             "Get due birthdays",
@@ -715,16 +741,8 @@ outreach = {
             200,
             PB + "/api/leads/due-birthdays?days=0",
         ),
-        http_get(
-            "Get due reviews",
-            "http-reviews",
-            240,
-            480,
-            PB + "/api/leads/due-reviews",
-        ),
         code_node("Split birthdays", "code-split-bday", 480, 200, "split_outreach.js"),
-        code_node("Split reviews", "code-split-rev", 480, 480, "split_outreach.js"),
-        wait_seconds("Wait before outreach", "wait-out", 640, 340, 15),
+        wait_seconds("Wait before outreach", "wait-out", 640, 200, 15),
         http_evo_send("Send outreach WhatsApp", "http-evo-out", 880, 340),
         http_post_json(
             "Mark outreach sent",
@@ -732,26 +750,17 @@ outreach = {
             1120,
             340,
             PB + "/api/leads/ai-event",
-            "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type }) }}",
+            "={{ JSON.stringify({ phone: $('Wait before outreach').item.json.phone, name: $('Wait before outreach').item.json.name, type: $('Wait before outreach').item.json.type }) }}",
         ),
     ],
     "connections": {
         "Daily 9am": {
             "main": [[{"node": "Get due birthdays", "type": "main", "index": 0}]]
         },
-        "Every 6 hours": {
-            "main": [[{"node": "Get due reviews", "type": "main", "index": 0}]]
-        },
         "Get due birthdays": {
             "main": [[{"node": "Split birthdays", "type": "main", "index": 0}]]
         },
-        "Get due reviews": {
-            "main": [[{"node": "Split reviews", "type": "main", "index": 0}]]
-        },
         "Split birthdays": {
-            "main": [[{"node": "Wait before outreach", "type": "main", "index": 0}]]
-        },
-        "Split reviews": {
             "main": [[{"node": "Wait before outreach", "type": "main", "index": 0}]]
         },
         "Wait before outreach": {
@@ -826,7 +835,7 @@ marketing = {
             1440,
             300,
             PB + "/api/leads/ai-event",
-            "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, leadId: $json.leadId }) }}",
+            "={{ JSON.stringify({ phone: $('Wait before blast').item.json.phone, name: $('Wait before blast').item.json.name, type: $('Wait before blast').item.json.type, leadId: $('Wait before blast').item.json.leadId }) }}",
         ),
     ],
     "connections": {
@@ -857,9 +866,6 @@ marketing = {
     },
 }
 
-(root / "chatdent-whatsapp-booking.json").write_text(
-    json.dumps(booking, indent=2), encoding="utf-8"
-)
 (root / "chatdent-reminders.json").write_text(
     json.dumps(reminders, indent=2), encoding="utf-8"
 )

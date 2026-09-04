@@ -134,8 +134,10 @@ class _LabworksTableState extends State<LabworksTable> {
         _buildCommandBar(),
         Padding(
           padding: const EdgeInsets.all(8),
-          child: Row(
-            spacing: 3,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [_buildSearch(), _buildShowingToggle()],
           ),
         ),

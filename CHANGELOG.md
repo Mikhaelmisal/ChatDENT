@@ -1,3 +1,14 @@
+### ____0.10.4____
+
+- Clinic hours: morning plus optional evening per weekday; appointment picker uses hour then slot length (default 20 minutes).
+- Leads: overlapping follow-up bookings allowed; call-outcome filter and new-lead toast; reschedule stage; invoices on the patient card; birthday outreach calendar.
+- WhatsApp / n8n: booking token and Evolution key from env; welcome still sends in quiet hours; 3-minute AI cooldown; staff pause expires after 4 hours; clinic-local birthday 09:00; reminders skip quiet hours; flyer send no longer blocks AI events.
+
+### ____0.10.3____
+
+- Windows clinic UI: Outfit typeface, SuperDesign chrome/canvas, sidebar and command-bar shadows, transparent tooth logo, matching Windows taskbar icon.
+- Removed the app-bar back button; screen title pill stays in the content header.
+
 ### ____0.10.2____
 
 - New Features & Enhancements

@@ -63,12 +63,14 @@ void main() {
       final lead = Lead.fromJson({
         'id': 'c1',
         'called': true,
+        'coming': true,
         'marketingQueued': true,
         'marketingImageUrl': 'https://example.com/fly.jpg',
       });
       expect(lead.called, isTrue);
       final copy = Lead.fromJson(lead.toJson());
       expect(copy.called, isTrue);
+      expect(copy.coming, isTrue);
       expect(copy.marketingQueued, isTrue);
       expect(copy.marketingImageUrl, 'https://example.com/fly.jpg');
     });

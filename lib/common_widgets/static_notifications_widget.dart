@@ -17,7 +17,7 @@ class StaticNotificationsIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return FlyoutTarget(
       controller: _notificationsFlyoutController,
-      child: const Icon(FluentIcons.ringer),
+      child: const Icon(FluentIcons.chat),
     );
   }
 }

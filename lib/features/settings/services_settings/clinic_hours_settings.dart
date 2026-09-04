@@ -25,6 +25,13 @@ const _weekdayKeys = {
 
 final _timeChoices = List<int>.generate(28, (i) => 480 + i * 30); // 08:00–21:30
 
+DayHours get _defaultDay => DayHours.sessions(
+      morningOpen: 600,
+      morningClose: 840,
+      eveningOpen: 1020,
+      eveningClose: 1140,
+    );
+
 class ClinicHoursSettings extends StatefulWidget {
   const ClinicHoursSettings({super.key});
 
@@ -59,13 +66,7 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
         .map((s) => s.trim())
         .where((s) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s))
         .toList();
-    hours = ClinicHours(
-      week: hours.week,
-      utcOffsetMinutes: hours.utcOffsetMinutes,
-      slotMinutes: hours.slotMinutes,
-      defaultOperatorId: hours.defaultOperatorId,
-      closedDates: closed,
-    );
+    hours = hours.copyWith(closedDates: closed);
     globalSettings.set(Setting.fromJson({
       'id': ClinicHours.settingId,
       'value': hours.toJsonString(),
@@ -88,28 +89,142 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
     return List.generate(24, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
+  int _nearestChoice(int minutes) {
+    return _timeChoices.reduce(
+      (a, b) => (a - minutes).abs() <= (b - minutes).abs() ? a : b,
+    );
+  }
+
+  void _setDay(int weekday, DayHours? day) {
+    final next = Map<int, DayHours?>.from(hours.week);
+    next[weekday] = day;
+    setState(() => hours = hours.copyWith(week: next));
+  }
+
+  DayHours _normalized({
+    required DayHours day,
+    int? morningOpen,
+    int? morningClose,
+    int? eveningOpen,
+    int? eveningClose,
+    bool? eveningOn,
+  }) {
+    var mOpen = _nearestChoice(morningOpen ?? day.morningOpen);
+    var mClose = _nearestChoice(morningClose ?? day.morningClose);
+    final on = eveningOn ?? day.hasEvening;
+    var eOpen = _nearestChoice(eveningOpen ?? day.eveningOpen ?? 1020);
+    var eClose = _nearestChoice(eveningClose ?? day.eveningClose ?? 1140);
+    if (mClose <= mOpen) mClose = mOpen + 30;
+    if (on) {
+      if (eOpen < mClose) eOpen = mClose;
+      if (eClose <= eOpen) eClose = eOpen + 30;
+    }
+    return DayHours.sessions(
+      morningOpen: mOpen,
+      morningClose: mClose,
+      eveningOpen: on ? eOpen : null,
+      eveningClose: on ? eClose : null,
+    );
+  }
+
   Widget _timeBox({
     required String label,
-    required int? value,
-    required void Function(int?) onChanged,
-    bool allowClosed = false,
+    required int value,
+    required void Function(int) onChanged,
   }) {
+    final snapped = _nearestChoice(value);
     return InfoLabel(
       label: label,
-      child: ComboBox<int?>(
+      child: ComboBox<int>(
         isExpanded: true,
-        value: value,
+        value: snapped,
         items: [
-          if (allowClosed)
-            ComboBoxItem<int?>(value: null, child: Txt(txt('closed'))),
           ..._timeChoices.map(
-            (m) => ComboBoxItem<int?>(
+            (m) => ComboBoxItem<int>(
               value: m,
               child: Text(ClinicHours.formatMinutes(m)),
             ),
           ),
         ],
-        onChanged: onChanged,
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+
+  Widget _dayBlock(int weekday) {
+    final day = hours.week[weekday];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Checkbox(
+            checked: day != null,
+            content: Txt(txt(_weekdayKeys[weekday]!)),
+            onChanged: (on) =>
+                _setDay(weekday, on == true ? _defaultDay : null),
+          ),
+          if (day != null) ...[
+            Txt(txt('morningHours')),
+            ResponsiveRow(children: [
+              _timeBox(
+                label: txt('fromTime'),
+                value: day.morningOpen,
+                onChanged: (v) => _setDay(
+                  weekday,
+                  _normalized(day: day, morningOpen: v),
+                ),
+              ),
+              _timeBox(
+                label: txt('toTime'),
+                value: day.morningClose,
+                onChanged: (v) => _setDay(
+                  weekday,
+                  _normalized(day: day, morningClose: v),
+                ),
+              ),
+            ]),
+            Checkbox(
+              checked: day.hasEvening,
+              content: Txt(txt('eveningSession')),
+              onChanged: (on) => _setDay(
+                weekday,
+                _normalized(day: day, eveningOn: on == true),
+              ),
+            ),
+            if (day.hasEvening) ...[
+              Txt(txt('eveningHours')),
+              ResponsiveRow(children: [
+                _timeBox(
+                  label: txt('fromTime'),
+                  value: day.eveningOpen ?? 1020,
+                  onChanged: (v) => _setDay(
+                    weekday,
+                    _normalized(day: day, eveningOpen: v),
+                  ),
+                ),
+                _timeBox(
+                  label: txt('toTime'),
+                  value: day.eveningClose ?? 1140,
+                  onChanged: (v) => _setDay(
+                    weekday,
+                    _normalized(day: day, eveningClose: v),
+                  ),
+                ),
+              ]),
+            ],
+          ],
+        ],
       ),
     );
   }
@@ -124,7 +239,7 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
         trailing: const AppliesToIndicator(scope: Scope.app),
         contentPadding: const EdgeInsets.all(10),
         content: SizedBox(
-          width: 520,
+          width: 560,
           child: MStreamBuilder(
             streams: [accounts.list.stream],
             builder: (context, _) {
@@ -135,27 +250,26 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
                   InfoBar(
                     title: Txt(txt('clinicHoursInfo')),
                     severity: InfoBarSeverity.info,
+                    isLong: true,
                   ),
                   ResponsiveRow(children: [
                     InfoLabel(
                       label: txt('slotLength'),
                       child: ComboBox<int>(
                         isExpanded: true,
-                        value: hours.slotMinutes,
+                        value: const {15, 20, 30, 45, 60}
+                                .contains(hours.slotMinutes)
+                            ? hours.slotMinutes
+                            : 20,
                         items: const [
                           ComboBoxItem(value: 15, child: Text('15')),
+                          ComboBoxItem(value: 20, child: Text('20')),
                           ComboBoxItem(value: 30, child: Text('30')),
                           ComboBoxItem(value: 45, child: Text('45')),
                           ComboBoxItem(value: 60, child: Text('60')),
                         ],
                         onChanged: (v) => setState(() {
-                          hours = ClinicHours(
-                            week: hours.week,
-                            utcOffsetMinutes: hours.utcOffsetMinutes,
-                            slotMinutes: v ?? hours.slotMinutes,
-                            defaultOperatorId: hours.defaultOperatorId,
-                            closedDates: hours.closedDates,
-                          );
+                          hours = hours.copyWith(slotMinutes: v);
                         }),
                       ),
                     ),
@@ -171,13 +285,7 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
                           ComboBoxItem(value: 240, child: Text('+04:00')),
                         ],
                         onChanged: (v) => setState(() {
-                          hours = ClinicHours(
-                            week: hours.week,
-                            utcOffsetMinutes: v ?? hours.utcOffsetMinutes,
-                            slotMinutes: hours.slotMinutes,
-                            defaultOperatorId: hours.defaultOperatorId,
-                            closedDates: hours.closedDates,
-                          );
+                          hours = hours.copyWith(utcOffsetMinutes: v);
                         }),
                       ),
                     ),
@@ -201,88 +309,11 @@ class _ClinicHoursSettingsState extends State<ClinicHoursSettings> {
                         ),
                       ],
                       onChanged: (v) => setState(() {
-                        hours = ClinicHours(
-                          week: hours.week,
-                          utcOffsetMinutes: hours.utcOffsetMinutes,
-                          slotMinutes: hours.slotMinutes,
-                          defaultOperatorId: v ?? '',
-                          closedDates: hours.closedDates,
-                        );
+                        hours = hours.copyWith(defaultOperatorId: v ?? '');
                       }),
                     ),
                   ),
-                  ...[1, 2, 3, 4, 5, 6, 7].map((d) {
-                    final day = hours.week[d];
-                    return ResponsiveRow(children: [
-                      SizedBox(
-                        width: 90,
-                        child: Checkbox(
-                          checked: day != null,
-                          content: Txt(txt(_weekdayKeys[d]!)),
-                          onChanged: (on) => setState(() {
-                            final next = Map<int, DayHours?>.from(hours.week);
-                            next[d] = on == true
-                                ? const DayHours(
-                                    open: 600,
-                                    close: 1140,
-                                    breakStart: 810,
-                                    breakEnd: 870,
-                                  )
-                                : null;
-                            hours = ClinicHours(
-                              week: next,
-                              utcOffsetMinutes: hours.utcOffsetMinutes,
-                              slotMinutes: hours.slotMinutes,
-                              defaultOperatorId: hours.defaultOperatorId,
-                              closedDates: hours.closedDates,
-                            );
-                          }),
-                        ),
-                      ),
-                      if (day != null)
-                        _timeBox(
-                          label: txt('opens'),
-                          value: day.open,
-                          onChanged: (v) => setState(() {
-                            final next = Map<int, DayHours?>.from(hours.week);
-                            next[d] = DayHours(
-                              open: v ?? day.open,
-                              close: day.close,
-                              breakStart: day.breakStart,
-                              breakEnd: day.breakEnd,
-                            );
-                            hours = ClinicHours(
-                              week: next,
-                              utcOffsetMinutes: hours.utcOffsetMinutes,
-                              slotMinutes: hours.slotMinutes,
-                              defaultOperatorId: hours.defaultOperatorId,
-                              closedDates: hours.closedDates,
-                            );
-                          }),
-                        ),
-                      if (day != null)
-                        _timeBox(
-                          label: txt('closes'),
-                          value: day.close,
-                          onChanged: (v) => setState(() {
-                            final next = Map<int, DayHours?>.from(hours.week);
-                            next[d] = DayHours(
-                              open: day.open,
-                              close: v ?? day.close,
-                              breakStart: day.breakStart,
-                              breakEnd: day.breakEnd,
-                            );
-                            hours = ClinicHours(
-                              week: next,
-                              utcOffsetMinutes: hours.utcOffsetMinutes,
-                              slotMinutes: hours.slotMinutes,
-                              defaultOperatorId: hours.defaultOperatorId,
-                              closedDates: hours.closedDates,
-                            );
-                          }),
-                        ),
-                    ]);
-                  }),
+                  ...[1, 2, 3, 4, 5, 6, 7].map(_dayBlock),
                   InfoLabel(
                     label: txt('closedDates'),
                     child: CupertinoTextField(

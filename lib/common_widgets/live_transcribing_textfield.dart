@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/live_transcription_button.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/network.dart';
@@ -61,11 +62,15 @@ class _LiveTranscribingTextFieldState extends State<LiveTranscribingTextField> {
   @override
   Widget build(BuildContext context) {
     final showMic = network.isOnline() && globalSettings.aiServicesEnabled;
+    final p = ChatDentPalette.of(context);
     return Stack(
       children: [
         CupertinoTextField(
-          style: widget.style,
-          placeholderStyle: widget.placeholderStyle,
+          style: widget.style ??
+              TextStyle(fontFamily: ChatDentFonts.ui, color: p.stone),
+          placeholderStyle: widget.placeholderStyle ??
+              TextStyle(fontFamily: ChatDentFonts.ui, color: p.muted),
+          decoration: chatDentFieldFill(p),
           expands: widget.expands,
           maxLines: widget.maxLines,
           controller: _effectiveController,

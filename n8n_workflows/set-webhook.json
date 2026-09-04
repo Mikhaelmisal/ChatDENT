@@ -1,9 +1,0 @@
-{
-  "webhook": {
-    "enabled": true,
-    "url": "http://n8n:5678/webhook/chatdent-whatsapp",
-    "byEvents": false,
-    "base64": false,
-    "events": ["MESSAGES_UPSERT"]
-  }
-}

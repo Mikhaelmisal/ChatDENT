@@ -461,11 +461,13 @@ class OrderRowState extends State<OrderRow>
           const DashedLine(thickness: 0.5),
           const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text(
-                txt("totalDue").toUpperCase(),
-                style: _sectionTitleTextStyle(theme),
+              Expanded(
+                child: Text(
+                  txt("totalDue").toUpperCase(),
+                  style: _sectionTitleTextStyle(theme),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               ValueListenableBuilder<double>(
                 valueListenable: _totalDueNotifier,
@@ -481,13 +483,15 @@ class OrderRowState extends State<OrderRow>
                   );
                 },
               ),
-              if (widget.order.cost == 0)
+              if (widget.order.cost == 0) ...[
+                const SizedBox(width: 8),
                 SmallLabel(
                   label: txt("notSet"),
                   textColor: Colors.white,
                   bgColor: Colors.warningPrimaryColor,
                   icon: FluentIcons.warning,
                 ),
+              ],
             ],
           ),
         ],

@@ -29,19 +29,11 @@ routerAdd("POST", "/api/leads/upsert", (e) => {
   if (!phone && !body.name) {
     throw new BadRequestError("name or phone required")
   }
-  let lead = null
-  const leads = b.listStore("leads")
-  for (let i = 0; i < leads.length; i++) {
-    const l = leads[i]
-    if (l.archived === true) continue
-    if (phone && String(l.phone || "") === phone) {
-      lead = l
-      break
-    }
-  }
+  const patient = phone ? b.findPatientByPhone(phone) : null
+  let lead = phone ? b.findLeadByPhone(phone) : null
   const id = lead ? lead.id : b.newId()
   const isNewLead = !lead
-  const keepStage = lead && (lead.stage === "converted" || lead.stage === "scheduled" || lead.stage === "interested")
+  const keepStage = lead && (lead.stage === "converted" || lead.stage === "scheduled" || lead.stage === "interested" || lead.stage === "reschedule")
   const prevNotes = (lead && lead.notes) || ""
   const incoming = String(body.notes || "").trim()
   let notes = prevNotes
@@ -49,9 +41,10 @@ routerAdd("POST", "/api/leads/upsert", (e) => {
     notes = (prevNotes ? prevNotes + "\n" : "") + incoming
     if (notes.length > 2500) notes = notes.slice(-2500)
   }
+  const patientName = patient && patient.title ? String(patient.title).trim() : ""
   const data = Object.assign({}, lead || {}, {
     id: id,
-    title: (lead && lead.title) || body.name || "",
+    title: patientName || (lead && lead.title) || body.name || "",
     phone: phone || (lead && lead.phone) || "",
     email: body.email != null ? body.email : (lead && lead.email) || "",
     source: body.source || (lead && lead.source) || "manual",
@@ -62,23 +55,43 @@ routerAdd("POST", "/api/leads/upsert", (e) => {
     whatsappConsent: body.optOut === true ? false : ((lead && lead.whatsappConsent === false) ? false : true),
     assistantPaused: body.optOut === true ? true : (lead && lead.assistantPaused) || false,
   })
-  b.upsertData(id, "leads", data)
-  const patient = b.findPatientByPhone(phone)
+  if (patient && patient.id) data.patientID = patient.id
   const isReturningPatient = !!patient
-  const notifyGroup = data.groupAlertSent !== true
+  // Only one staff-group alert per phone (across lead rows).
+  // Never alert for short review acknowledgements like "Done".
+  let alreadyAlerted = lead && lead.groupAlertSent === true
+  if (!alreadyAlerted && phone) {
+    const leads = b.listStore("leads")
+    for (let i = 0; i < leads.length; i++) {
+      const l = leads[i]
+      if (l.id === id) continue
+      if (l.groupAlertSent === true && b.matchPhone(l.phone, phone)) {
+        alreadyAlerted = true
+        break
+      }
+    }
+  }
+  const skipGroupForReviewDone = b.isReviewDoneText(incoming)
+  b.upsertData(id, "leads", data)
+  const notifyGroup =
+    !alreadyAlerted && body.optOut !== true && !skipGroupForReviewDone
   if (notifyGroup) {
     data.groupAlertSent = true
     b.upsertData(id, "leads", data)
   }
   const evo = b.parseEvo()
-  const name = data.title || body.name || ""
+  const name = data.title || patientName || body.name || ""
   return e.json(200, {
     lead: data,
-    isNewLead: isNewLead,
+    patient: patient
+      ? { id: patient.id, title: patient.title, phone: patient.phone }
+      : null,
+    isNewLead: isNewLead && !isReturningPatient,
     isReturningPatient: isReturningPatient,
     optOut: body.optOut === true,
     shouldReply: b.shouldReply(data) && body.optOut !== true,
     notifyGroup: notifyGroup && body.optOut !== true,
+    sendWelcome: isNewLead && !isReturningPatient && body.optOut !== true,
     staffGroupJid: evo.staffGroupJid || "120363426681576301@g.us",
     groupText: b.groupAlertText(
       isReturningPatient,
@@ -105,20 +118,8 @@ routerAdd("POST", "/api/leads/book", (e) => {
   if (!start) throw new BadRequestError("invalid slotId")
   const hours = b.parseHours()
   const duration = parseInt(body.duration || hours.slotMinutes, 10)
-  const end = start + duration * 60000
-  if (!b.isFree(start, end, operatorId, b.busyFromAppointments())) {
-    throw new BadRequestError("slotTaken")
-  }
   const phone = b.persistPhone(body.phone)
-  let lead = null
-  const leads = b.listStore("leads")
-  for (let i = 0; i < leads.length; i++) {
-    const l = leads[i]
-    if (phone && String(l.phone || "") === phone) {
-      lead = l
-      break
-    }
-  }
+  let lead = phone ? b.findLeadByPhone(phone) : null
   let patient = null
   if (lead && lead.patientID) {
     try {
@@ -128,14 +129,7 @@ routerAdd("POST", "/api/leads/book", (e) => {
     } catch (err) {}
   }
   if (!patient && phone) {
-    const patients = b.listStore("patients")
-    for (let i = 0; i < patients.length; i++) {
-      const p = patients[i]
-      if (String(p.phone || "") === phone) {
-        patient = p
-        break
-      }
-    }
+    patient = b.findPatientByPhone(phone)
   }
   if (!patient) {
     const pid = b.newId()
@@ -155,7 +149,7 @@ routerAdd("POST", "/api/leads/book", (e) => {
     date: Math.round(start / 60000),
     duration: duration,
     operatorsIDs: operatorId ? [operatorId] : [],
-    preOpNotes: body.interest || "Booked from lead",
+    preOpNotes: body.interest || "",
     reminder24Sent: false,
     reminder2Sent: false,
   }
@@ -194,6 +188,13 @@ routerAdd("POST", "/api/leads/book", (e) => {
 routerAdd("GET", "/api/leads/reminders", (e) => {
   const b = require(`${__hooks}/leads_booking_lib.js`)
   b.assertToken(e)
+  const evoEarly = b.parseEvo()
+  if (b.isQuietHours()) {
+    return e.json(200, {
+      reminders: [],
+      evolution: { baseUrl: evoEarly.baseUrl, instance: evoEarly.instance },
+    })
+  }
   const hoursAhead = parseInt(b.queryGet(e, "hours", "24"), 10)
   const now = Date.now()
   const until = now + hoursAhead * 3600000

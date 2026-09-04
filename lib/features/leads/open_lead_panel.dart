@@ -1,7 +1,11 @@
 import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
+import 'package:chatdent/common_widgets/clinic_slot_time_picker.dart';
 import 'package:chatdent/common_widgets/contact_buttons.dart';
+import 'package:chatdent/core/multi_stream_builder.dart';
+import 'package:chatdent/features/accounts/accounts_controller.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
+import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/appointments/open_appointment_panel.dart';
 import 'package:chatdent/features/leads/booking_service.dart';
 import 'package:chatdent/features/leads/lead_model.dart';
@@ -283,6 +287,17 @@ class _LeadFollowUp extends StatefulWidget {
 }
 
 class _LeadFollowUpState extends State<_LeadFollowUp> {
+  String? _bookError;
+  String? _whatsappUrl;
+  String? _selectedDoctorId;
+  late DateTime _bookWhen;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookWhen = booking.hours.snapToSlot(DateTime.now());
+  }
+
   Patient? _ensurePatient() {
     if (widget.lead.patientID.isNotEmpty) {
       final existing = patients.get(widget.lead.patientID);
@@ -331,18 +346,70 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
     setState(() {});
   }
 
-  String? _bookError;
-  String? _whatsappUrl;
-
   void _bookSlot(FreeSlot slot) {
     try {
-      final result = booking.book(lead: widget.lead, slot: slot);
+      final result = booking.book(
+        lead: widget.lead,
+        slot: slot,
+        operatorId: slot.operatorId,
+        durationMinutes: booking.hours.slotMinutes,
+      );
       _bookError = null;
       _whatsappUrl = result.whatsappUrl;
       setState(() {});
     } on BookSlotException {
       setState(() => _bookError = txt('slotTaken'));
     }
+  }
+
+  void _setBookDate(DateTime day) {
+    final hours = booking.hours;
+    setState(() {
+      _bookWhen = hours.snapToSlot(DateTime(
+        day.year,
+        day.month,
+        day.day,
+        _bookWhen.hour,
+        _bookWhen.minute,
+      ));
+      _bookError = null;
+    });
+  }
+
+  void _jumpBookDays(int days) {
+    final n = DateTime.now();
+    _setBookDate(DateTime(n.year, n.month, n.day).add(Duration(days: days)));
+  }
+
+  bool _isBookOffset(int days) {
+    final n = DateTime.now();
+    final target = DateTime(n.year, n.month, n.day).add(Duration(days: days));
+    return _bookWhen.year == target.year &&
+        _bookWhen.month == target.month &&
+        _bookWhen.day == target.day;
+  }
+
+  void _bookPicked() {
+    final hours = booking.hours;
+    final when = hours.snapToSlot(_bookWhen);
+    if (hours.slotStartsForLocalDate(when).isEmpty) {
+      setState(() => _bookError = txt('closed'));
+      return;
+    }
+    final op = _selectedDoctorId ??
+        (booking.bookingOperatorIds().isEmpty
+            ? ''
+            : booking.bookingOperatorIds().first);
+    final start = hours.applyMinutes(
+      when,
+      when.hour * 60 + when.minute,
+    );
+    _bookSlot(FreeSlot(
+      id: FreeSlot.makeId(op, start),
+      start: start,
+      end: start.add(Duration(minutes: hours.slotMinutes)),
+      operatorId: op,
+    ));
   }
 
   void _sendWhatsAppConfirm() {
@@ -360,6 +427,7 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
     }
     openAppointment(Appointment.fromJson({
       'patientID': patient.id,
+      'duration': booking.hours.slotMinutes,
       if (login.perm(Perm.patients).exact(1) ||
           login.perm(Perm.appointments).exact(1) ||
           login.currentLoginIsOperator)
@@ -413,9 +481,17 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
         Checkbox(
           checked: widget.lead.called,
           onChanged: enabled
-              ? (v) => setState(() => widget.lead.called = v ?? false)
+              ? (v) => setState(() => widget.lead.markCalled(v ?? false))
               : null,
           content: Txt(txt('leadCalled')),
+        ),
+        const SizedBox(height: 4),
+        Checkbox(
+          checked: widget.lead.isComing,
+          onChanged: enabled && widget.lead.called
+              ? (v) => setState(() => widget.lead.markComing(v ?? false))
+              : null,
+          content: Txt(txt('coming')),
         ),
         const SizedBox(height: 8),
         InfoLabel(
@@ -490,30 +566,21 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
             children: [
               PhoneNumberButton(
                 onlyIcon: false,
+                showFlag: false,
                 phoneNumbers: widget.lead.phone,
               ),
             ],
           ),
         const SizedBox(height: 16),
         if (enabled && login.perm(Perm.appointments).some) ...[
-          Txt(txt('freeSlots')),
-          const SizedBox(height: 6),
-          ...() {
-            final slots = booking.nextSlots(limit: 8);
-            if (slots.isEmpty) {
-              return [Txt(txt('noFreeSlots'))];
-            }
-            return [
-              for (final slot in slots)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Button(
-                    onPressed: () => _bookSlot(slot),
-                    child: Text(DF.full(slot.start.toLocal())),
-                  ),
-                ),
-            ];
-          }(),
+          if (widget.lead.canBookVisit)
+            MStreamBuilder(
+              streams: [
+                appointments.observableMap.stream,
+                accounts.list.stream,
+              ],
+              builder: (context, _) => _buildDoctorBooking(enabled),
+            ),
           if (_bookError != null)
             InfoBar(
               title: Text(_bookError!),
@@ -532,6 +599,7 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
         ],
         if (linked != null) ...[
           InfoBar(
+            isLong: true,
             title: Txt(txt('linkedPatient')),
             content: Text(linked.title),
             action: Button(
@@ -550,6 +618,132 @@ class _LeadFollowUpState extends State<_LeadFollowUp> {
             onPressed: _schedule,
             child: ButtonContent(FluentIcons.add_event, txt('scheduleAppointment')),
           ),
+      ],
+    );
+  }
+
+  Widget _buildDoctorBooking(bool enabled) {
+    final boards = booking.doctorBoards();
+    if (boards.isEmpty) {
+      return Txt(txt('noFreeSlots'));
+    }
+    final selectedId = _selectedDoctorId != null &&
+            boards.any((b) => b.operatorId == _selectedDoctorId)
+        ? _selectedDoctorId!
+        : boards.first.operatorId;
+    final selected = boards.firstWhere(
+      (b) => b.operatorId == selectedId,
+      orElse: () => boards.first,
+    );
+    final hours = booking.hours;
+    final dayBooked = booking.bookedOn(
+      operatorId: selected.operatorId,
+      day: _bookWhen,
+    );
+    final dayOpen = hours.slotStartsForLocalDate(_bookWhen).isNotEmpty;
+    final now = DateTime.now();
+    final sameDay = _bookWhen.year == now.year &&
+        _bookWhen.month == now.month &&
+        _bookWhen.day == now.day;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InfoLabel(
+          label: '${txt("pickDoctor")}:',
+          child: ComboBox<String>(
+            isExpanded: true,
+            value: selected.operatorId,
+            items: [
+              for (final board in boards)
+                ComboBoxItem(
+                  value: board.operatorId,
+                  child: Text(
+                    board.name.isEmpty ? txt('doctors') : board.name,
+                  ),
+                ),
+            ],
+            onChanged: enabled
+                ? (id) => setState(() => _selectedDoctorId = id)
+                : null,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InfoLabel(
+          label: '${txt("date")}:',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 8,
+            children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final days in [0, 1, 2, 3, 7])
+                    ToggleButton(
+                      checked: _isBookOffset(days),
+                      onChanged: enabled
+                          ? (_) => _jumpBookDays(days)
+                          : null,
+                      child: Text(days == 0 ? txt('today') : '+$days'),
+                    ),
+                ],
+              ),
+              DatePicker(
+                selected: DateTime(
+                  _bookWhen.year,
+                  _bookWhen.month,
+                  _bookWhen.day,
+                ),
+                startDate: DateTime(now.year, now.month, now.day),
+                endDate: DateTime(now.year + 1, now.month, now.day),
+                onChanged: enabled ? _setBookDate : null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        InfoLabel(
+          label: '${txt("time")}:',
+          child: ClinicSlotTimePicker(
+            value: _bookWhen,
+            onChange: (d) => setState(() => _bookWhen = d),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (dayBooked.isNotEmpty) ...[
+          Txt(sameDay ? txt('bookedToday') : DF.commonDate(_bookWhen)),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final apt in dayBooked)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: FluentTheme.of(context)
+                          .resources
+                          .controlStrokeColorDefault,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${DF.time(apt.date.toLocal())} ${apt.title.trim()}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        FilledButton(
+          onPressed: enabled && dayOpen ? _bookPicked : null,
+          child: ButtonContent(FluentIcons.add_event, txt('addAppointment')),
+        ),
+        const SizedBox(height: 8),
       ],
     );
   }

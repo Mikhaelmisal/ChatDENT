@@ -57,7 +57,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             }
           ]
         },
@@ -81,7 +81,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             }
           ]
         },
@@ -98,7 +98,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
+        "jsCode": "function n8nEnv(name, fallback) {\n  try {\n    const v = $env[name];\n    if (v != null && String(v).trim() !== '') return String(v).trim();\n  } catch (e) {}\n  return fallback == null ? '' : fallback;\n}\n\nconst body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nconst evo = body.evolution || {};\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: n8nEnv('N8N_EVO_BASE', 'http://evolution-api:8080'),\n      evoKey: n8nEnv('EVOLUTION_API_KEY', ''),\n      evoInstance:\n        evo.instance || n8nEnv('WHATSAPP_SESSION_ID', 'clinic_default'),\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
       },
       "id": "code-split-24",
       "name": "Split 24h",
@@ -111,7 +111,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: 'clinic_default',\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
+        "jsCode": "function n8nEnv(name, fallback) {\n  try {\n    const v = $env[name];\n    if (v != null && String(v).trim() !== '') return String(v).trim();\n  } catch (e) {}\n  return fallback == null ? '' : fallback;\n}\n\nconst body = $input.first().json || {};\nconst reminders = body.reminders || [];\nif (!reminders.length) return [];\nconst evo = body.evolution || {};\nreturn reminders.map(function (r) {\n  return {\n    json: {\n      evoBase: n8nEnv('N8N_EVO_BASE', 'http://evolution-api:8080'),\n      evoKey: n8nEnv('EVOLUTION_API_KEY', ''),\n      evoInstance:\n        evo.instance || n8nEnv('WHATSAPP_SESSION_ID', 'clinic_default'),\n      appointmentId: r.appointmentId,\n      kind: r.kind || '24',\n      number: String(r.phone || '').replace(/\\D/g, ''),\n      reply: r.whatsappText || 'Reminder: you have an appointment.'\n    }\n  };\n});\n"
       },
       "id": "code-split-2",
       "name": "Split 2h",
@@ -147,7 +147,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -178,7 +178,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -188,7 +188,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ appointmentId: $json.appointmentId, kind: $json.kind }) }}",
+        "jsonBody": "={{ JSON.stringify({ appointmentId: $('Wait before reminder').item.json.appointmentId, kind: $('Wait before reminder').item.json.kind }) }}",
         "options": {}
       },
       "id": "http-mark",

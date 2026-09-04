@@ -193,6 +193,8 @@ class LocalSettings extends ObservablePersistingObject {
   DateTime? aiTokenExpiry;
   EventsViewMode calendarEventsViewMode = EventsViewMode.agenda;
   String lastSeenVersion = "";
+  /// Left nav: true = icons only ([PaneDisplayMode.compact]).
+  bool sidebarCollapsed = false;
 
   // ── DICOM viewer preferences
   // JSON string: {"windowCenter": double, "windowWidth": double,
@@ -242,6 +244,7 @@ class LocalSettings extends ObservablePersistingObject {
         EventsViewMode.values[json["calendarEventsViewMode"] ?? 0];
     lastSeenVersion = json["lastSeenVersion"] ?? lastSeenVersion;
     dicomViewerPrefs = json["dicomViewerPrefs"] as String? ?? "";
+    sidebarCollapsed = json["sidebarCollapsed"] == true;
   }
 
   @override
@@ -256,6 +259,7 @@ class LocalSettings extends ObservablePersistingObject {
       "lastSeenVersion": lastSeenVersion,
       "calendarEventsViewMode": calendarEventsViewMode.index,
       "dicomViewerPrefs": dicomViewerPrefs,
+      "sidebarCollapsed": sidebarCollapsed,
       if (aiToken != null) "aiToken": aiToken,
       if (aiTokenExpiry != null)
         "aiTokenExpiry": aiTokenExpiry!.millisecondsSinceEpoch,

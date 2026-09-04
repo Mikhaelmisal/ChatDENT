@@ -1,6 +1,8 @@
 import 'package:chatdent/core/observable.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
+import 'package:chatdent/features/leads/lead_model.dart';
+import 'package:chatdent/features/leads/leads_store.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
 
 class _DashboardController {
@@ -24,6 +26,10 @@ class _DashboardController {
         .where((x) => x.firstAppointmentForThisPatient && x.patient != null)
         .map((x) => x.patient!)
         .toList();
+  }
+
+  List<Lead> get newLeadsToday {
+    return leads.present.values.where((lead) => lead.createdToday).toList();
   }
 }
 

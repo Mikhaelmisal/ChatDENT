@@ -89,6 +89,10 @@ class FCMManager {
 
 
                     try {
+                        if (!window.isSecureContext) {
+                            console.warn("Skipping FCM prompt: page is not a secure context (use HTTPS or localhost).");
+                            return;
+                        }
                         const supported = "Notification" in window && typeof window.Notification !== "undefined";
                         const legacySafari = !supported && "safari" in window && "pushNotification" in window.safari;
 

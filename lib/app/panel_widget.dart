@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/delete_button.dart';
 import 'package:chatdent/common_widgets/item_title.dart';
@@ -129,13 +130,7 @@ class _PanelScreenState extends State<PanelScreen> {
       child: Container(
         margin: const EdgeInsetsDirectional.only(
             top: 5, bottom: 5, start: 0, end: 5),
-        decoration: BoxDecoration(
-            boxShadow: kElevationToShadow[24],
-            color: FluentTheme.of(context)
-                .resources
-                .solidBackgroundFillColorBaseAlt,
-            border: Border.all(color: Colors.grey.withAlpha(150)),
-            borderRadius: BorderRadius.circular(5)),
+        decoration: chatDentPopupCard(ChatDentPalette.of(context)),
         child: MStreamBuilder(
             streams: [
               localSettings.stream,
@@ -146,6 +141,7 @@ class _PanelScreenState extends State<PanelScreen> {
               return Column(
                 key: Key(localSettings.selectedLocale.toString()),
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildPanelHeader(),
                   if (routes.minimizePanels() == false ||
@@ -187,7 +183,7 @@ class _PanelScreenState extends State<PanelScreen> {
         }
       },
       child: Container(
-        color: FluentTheme.of(context).scaffoldBackgroundColor,
+        color: ChatDentPalette.of(context).canvas,
         padding: EdgeInsets.all(
             widget.panel.tabs[widget.panel.selectedTab()].padding.toDouble()),
         constraints: BoxConstraints(
@@ -202,20 +198,23 @@ class _PanelScreenState extends State<PanelScreen> {
 
   Widget _buildBottomControls() {
     return Container(
-      constraints: const BoxConstraints(minHeight: 50, minWidth: 350),
+      constraints: const BoxConstraints(minHeight: 50),
       child: StreamBuilder(
           stream: widget.panel.inProgress.stream,
           builder: (context, snapshot) {
             return Container(
               decoration: BoxDecoration(
                 border: Border(
-                    top: BorderSide(color: Colors.grey.withValues(alpha: 0.1))),
+                    top: BorderSide(color: ChatDentPalette.of(context).border)),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               child: widget.panel.inProgress()
                   ? const Center(child: ProgressBar())
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  : OverflowBar(
+                      alignment: MainAxisAlignment.center,
+                      overflowAlignment: OverflowBarAlignment.center,
+                      spacing: 6,
+                      overflowSpacing: 8,
                       children: [
                         if (widget.panel.additionalControls != null)
                           widget.panel.additionalControls!,
@@ -364,7 +363,7 @@ class _PanelScreenState extends State<PanelScreen> {
   Widget _buildTabsControllers() {
     return Container(
       decoration:
-          BoxDecoration(color: FluentTheme.of(context).inactiveBackgroundColor),
+          BoxDecoration(color: ChatDentPalette.of(context).chrome),
       padding: const EdgeInsets.fromLTRB(3, 15, 3, 0),
       child: SizedBox(
         height: 39,
@@ -372,7 +371,7 @@ class _PanelScreenState extends State<PanelScreen> {
           closeButtonVisibility: CloseButtonVisibilityMode.never,
           onChanged: (value) => widget.panel.selectedTab(value),
           currentIndex: widget.panel.selectedTab(),
-          showScrollButtons: false,
+          showScrollButtons: true,
           shortcutsEnabled: true,
           tabWidthBehavior: widget.panel.showTitles
               ? TabWidthBehavior.equal
@@ -419,17 +418,27 @@ class _PanelScreenState extends State<PanelScreen> {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 2.8, horizontal: 5),
-        color: Colors.grey.withValues(alpha: 0.1),
+        color: ChatDentPalette.of(context).chrome,
         child: StreamBuilder(
             stream: widget.panel.inProgress.stream,
             builder: (context, snapshot) {
               return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(spacing: 2, children: [
-                    _buildPanelHeaderStoreName(),
-                    _buildPanelHeaderItemName(),
-                  ]),
+                  Expanded(
+                    child: Row(
+                      spacing: 2,
+                      children: [
+                        Flexible(child: _buildPanelHeaderStoreName()),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: _buildPanelHeaderItemName(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   Row(children: [
                     if (routes.panels().length > 1) _buildPanelSwitcher(),
                     // minimization is useless is prevented in big screens
@@ -485,40 +494,36 @@ class _PanelScreenState extends State<PanelScreen> {
   }
 
   Widget _buildPanelHeaderStoreName() {
-    return SizedBox(
-      width: 105,
-      child: Row(
-        children: [
-          Txt(
-            widget.panel.unicodeSymbol,
-            style: const TextStyle(fontSize: 20),
-          ),
-          Txt(
+    return Row(
+      children: [
+        Txt(
+          widget.panel.unicodeSymbol,
+          style: const TextStyle(fontSize: 20),
+        ),
+        Expanded(
+          child: Txt(
             txt(widget.panel.singularName),
             style: TextStyle(
+                fontFamily: ChatDentFonts.ui,
                 fontSize: 12,
-                color: FluentTheme.of(context).shadowColor,
+                color: ChatDentPalette.of(context).muted,
                 fontWeight: FontWeight.w500),
             overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildPanelHeaderItemName() {
-    return SizedBox(
-      width: 134,
-      child: ItemTitle(
-        maxWidth: 129,
-        radius: 0,
-        fontSize: 13,
-        item: widget.panel.title != null
-            ? Model.fromJson({"title": widget.panel.title})
-            : widget.panel.item,
-        predefinedColor:
-            widget.panel.item.archived == true ? Colors.grey : null,
-      ),
+    return ItemTitle(
+      radius: 0,
+      fontSize: 13,
+      item: widget.panel.title != null
+          ? Model.fromJson({"title": widget.panel.title})
+          : widget.panel.item,
+      predefinedColor:
+          widget.panel.item.archived == true ? Colors.grey : null,
     );
   }
 
@@ -530,6 +535,7 @@ class _PanelScreenState extends State<PanelScreen> {
       confirmCancelController.showFlyout(builder: (context) {
         return FlyoutContent(
           constraints: const BoxConstraints(maxWidth: 350),
+          color: ChatDentPalette.of(context).card,
           child: Column(
             spacing: 12,
             mainAxisSize: MainAxisSize.min,

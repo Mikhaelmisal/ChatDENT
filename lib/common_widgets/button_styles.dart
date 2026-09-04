@@ -28,28 +28,32 @@ class ButtonContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      spacing: 5,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        inProgress
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: ProgressRing(
-                  strokeWidth: 4,
-                ))
-            : Icon(icon, size: size),
-        Txt(
-          txt,
-          style: TextStyle(
-            fontSize: size,
-            color: inProgress
-                ? FluentTheme.of(context).inactiveColor.withValues(alpha: 0.3)
-                : null,
-          ),
-        )
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        spacing: 5,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          inProgress
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: ProgressRing(
+                    strokeWidth: 4,
+                  ))
+              : Icon(icon, size: size),
+          Txt(
+            txt,
+            style: TextStyle(
+              fontSize: size,
+              color: inProgress
+                  ? FluentTheme.of(context).inactiveColor.withValues(alpha: 0.3)
+                  : null,
+            ),
+          )
+        ],
+      ),
     );
   }
 }

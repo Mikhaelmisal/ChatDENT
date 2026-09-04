@@ -14,7 +14,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## ChatDENT WhatsApp assistant (OpenRouter)\n\n1. OPENROUTER_API_KEY in D:\\ChatDENT\\.env and N8N_BLOCK_ENV_ACCESS_IN_NODE=false in docker-compose, then: docker compose up -d n8n --force-recreate\n2. Import this workflow. Keep **ChatDENT WhatsApp booking** inactive.\n3. Evolution webhook: `http://n8n:5678/webhook/chatdent-whatsapp` event messages.upsert instance `clinic_default`.\n4. Activate this workflow.\n\nCanned WhatsApp (welcome, confirm, reminder, birthday, review, group alerts, opt-out) comes from **WhatsApp templates** in ChatDENT. The AI only chats after the first welcome. It never books and never quotes fees.",
+        "content": "## ChatDENT WhatsApp assistant (OpenRouter)\n\n1. OPENROUTER_API_KEY in D:\\ChatDENT\\.env and N8N_BLOCK_ENV_ACCESS_IN_NODE=false in docker-compose, then: docker compose up -d n8n --force-recreate\n2. Import this workflow. Keep only this assistant active for the webhook.\n3. Evolution webhook: `http://n8n:5678/webhook/chatdent-whatsapp` event messages.upsert instance `clinic_default`.\n4. Activate this workflow.\n\nSkipped like groups: staff-group chats, status, protocol noise, and Meta Ads / Click-to-WhatsApp automated chat (no AI reply, no new-lead group alert).\n\nCanned WhatsApp (welcome, confirm, reminder, birthday, review, group alerts, opt-out) comes from **WhatsApp templates** in ChatDENT. The AI only chats after the first welcome. It never books and never quotes fees.",
         "height": 520,
         "width": 420,
         "color": 6
@@ -47,7 +47,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const CONFIG = {\n  bookingToken: 'rlwqer5f50usxidldnhdzyg7',\n  pbBase: 'http://pocketbase:8090',\n  evoBase: 'http://evolution-api:8080',\n  evoKey: 'clinic_secret_key_123',\n  evoInstance: 'clinic_default'\n};\n\nfunction pickText(msg) {\n  if (!msg) return '';\n  if (typeof msg === 'string') return msg;\n  if (typeof msg.conversation === 'string') return msg.conversation;\n  if (msg.extendedTextMessage && msg.extendedTextMessage.text) return msg.extendedTextMessage.text;\n  if (msg.imageMessage && msg.imageMessage.caption) return msg.imageMessage.caption;\n  if (msg.videoMessage && msg.videoMessage.caption) return msg.videoMessage.caption;\n  if (msg.documentMessage && msg.documentMessage.caption) return msg.documentMessage.caption;\n  if (msg.ephemeralMessage && msg.ephemeralMessage.message) return pickText(msg.ephemeralMessage.message);\n  if (msg.viewOnceMessage && msg.viewOnceMessage.message) return pickText(msg.viewOnceMessage.message);\n  if (msg.viewOnceMessageV2 && msg.viewOnceMessageV2.message) return pickText(msg.viewOnceMessageV2.message);\n  if (msg.buttonsResponseMessage) {\n    return msg.buttonsResponseMessage.selectedDisplayText || msg.buttonsResponseMessage.selectedButtonId || '';\n  }\n  if (msg.listResponseMessage) {\n    const l = msg.listResponseMessage;\n    return l.title || (l.singleSelectReply && l.singleSelectReply.selectedRowId) || '';\n  }\n  return '';\n}\n\nfunction hasVoice(msg) {\n  if (!msg || typeof msg !== 'object') return false;\n  return !!(msg.audioMessage || msg.pttMessage || msg.ptt || msg.voiceMessage);\n}\n\nfunction unwrap(raw) {\n  if (!raw || typeof raw !== 'object') return {};\n  if (raw.body && (raw.body.data || raw.body.key || raw.body.message)) return unwrap(raw.body);\n  let inner = raw.data || raw;\n  if (Array.isArray(inner)) {\n    inner = inner.find(function (item) {\n      return item && item.key && item.key.fromMe !== true;\n    }) || inner[inner.length - 1] || {};\n  }\n  if (inner.data && (inner.key == null)) return unwrap(inner);\n  return inner;\n}\n\nfunction realJid(key, inner, raw) {\n  const k = key || {};\n  const candidates = [\n    k.remoteJidAlt,\n    k.senderPn,\n    k.participantAlt,\n    k.remoteJid,\n    inner.remoteJidAlt,\n    inner.senderPn,\n    inner.remoteJid,\n    raw.sender,\n    raw.senderPn\n  ];\n  let lidFallback = '';\n  for (let i = 0; i < candidates.length; i++) {\n    const v = String(candidates[i] || '');\n    if (!v) continue;\n    if (v.indexOf('@g.us') >= 0) return v;\n    if (v.indexOf('@lid') >= 0) {\n      if (!lidFallback) lidFallback = v;\n      continue;\n    }\n    if (v.indexOf('@s.whatsapp.net') >= 0 || v.indexOf('@c.us') >= 0) return v;\n    if (/^\\d{10,15}$/.test(v.replace(/\\D/g, '')) && v.indexOf('@') < 0) return v + '@s.whatsapp.net';\n  }\n  return lidFallback;\n}\n\nfunction isStopText(text) {\n  const t = String(text || '').toLowerCase().replace(/[^\\w\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (!t) return false;\n  return (\n    t === 'stop' ||\n    t === 'unsubscribe' ||\n    t === 'opt out' ||\n    t === 'optout' ||\n    t.indexOf('stop messages') >= 0 ||\n    t.indexOf('do not message') >= 0 ||\n    t.indexOf('dont message') >= 0 ||\n    t.indexOf(\"don't message\") >= 0 ||\n    t.indexOf('stop promotions') >= 0\n  );\n}\n\nconst raw = $input.first().json || {};\nconst inner = unwrap(raw);\nconst key = inner.key || {};\nconst msg = inner.message || inner;\nconst chatJid = String(key.remoteJid || inner.remoteJid || '');\nconst jid = realJid(key, inner, raw);\nconst fromMe = key.fromMe === true;\nconst isGroup =\n  chatJid.indexOf('@g.us') >= 0 ||\n  chatJid.indexOf('@broadcast') >= 0 ||\n  chatJid.indexOf('@newsletter') >= 0 ||\n  String(jid).indexOf('@g.us') >= 0;\nconst isStatus = chatJid.indexOf('status@broadcast') >= 0;\nconst phone = jid.replace(/@.*$/, '').replace(/\\D/g, '');\nconst name = String(inner.pushName || raw.pushName || '').trim();\nconst voice = hasVoice(msg);\nlet text = String(pickText(msg) || '').trim();\nif (!text && voice) text = '[voice note]';\nconst optOut = !fromMe && isStopText(text);\nlet skipReason = '';\nif (isGroup) skipReason = 'group';\nelse if (isStatus) skipReason = 'status';\nelse if (!phone) skipReason = 'noPhone';\nconst skip = skipReason !== '';\nconst staffReply = !skip && fromMe;\nconst choice = parseInt(text, 10);\nconst wantsBook = !skip && !fromMe && String(choice) === text && choice >= 1 && choice <= 12;\n\nreturn [{\n  json: Object.assign({}, CONFIG, {\n    skip: skip,\n    skipReason: skipReason,\n    staffReply: staffReply,\n    optOut: optOut,\n    voice: voice,\n    wantsBook: wantsBook,\n    slotIndex: wantsBook ? choice - 1 : -1,\n    phone: phone,\n    name: name,\n    text: text,\n    jid: jid\n  })\n}];\n"
+        "jsCode": "function n8nEnv(name, fallback) {\n  try {\n    const v = $env[name];\n    if (v != null && String(v).trim() !== '') return String(v).trim();\n  } catch (e) {}\n  return fallback == null ? '' : fallback;\n}\n\nconst CONFIG = {\n  bookingToken: n8nEnv('N8N_BOOKING_TOKEN', ''),\n  pbBase: n8nEnv('N8N_PB_BASE', 'http://pocketbase:8090'),\n  evoBase: n8nEnv('N8N_EVO_BASE', 'http://evolution-api:8080'),\n  evoKey: n8nEnv('EVOLUTION_API_KEY', ''),\n  evoInstance: n8nEnv('WHATSAPP_SESSION_ID', 'clinic_default')\n};\n\nfunction pickText(msg) {\n  if (!msg) return '';\n  if (typeof msg === 'string') return msg;\n  if (typeof msg.conversation === 'string') return msg.conversation;\n  if (msg.extendedTextMessage && msg.extendedTextMessage.text) return msg.extendedTextMessage.text;\n  if (msg.imageMessage && msg.imageMessage.caption) return msg.imageMessage.caption;\n  if (msg.videoMessage && msg.videoMessage.caption) return msg.videoMessage.caption;\n  if (msg.documentMessage && msg.documentMessage.caption) return msg.documentMessage.caption;\n  if (msg.ephemeralMessage && msg.ephemeralMessage.message) return pickText(msg.ephemeralMessage.message);\n  if (msg.viewOnceMessage && msg.viewOnceMessage.message) return pickText(msg.viewOnceMessage.message);\n  if (msg.viewOnceMessageV2 && msg.viewOnceMessageV2.message) return pickText(msg.viewOnceMessageV2.message);\n  if (msg.buttonsResponseMessage) {\n    return msg.buttonsResponseMessage.selectedDisplayText || msg.buttonsResponseMessage.selectedButtonId || '';\n  }\n  if (msg.listResponseMessage) {\n    const l = msg.listResponseMessage;\n    return l.title || (l.singleSelectReply && l.singleSelectReply.selectedRowId) || '';\n  }\n  return '';\n}\n\nfunction hasVoice(msg) {\n  if (!msg || typeof msg !== 'object') return false;\n  return !!(msg.audioMessage || msg.pttMessage || msg.ptt || msg.voiceMessage);\n}\n\nfunction unwrap(raw) {\n  if (!raw || typeof raw !== 'object') return {};\n  if (raw.body && (raw.body.data || raw.body.key || raw.body.message)) return unwrap(raw.body);\n  let inner = raw.data || raw;\n  if (Array.isArray(inner)) {\n    inner = inner.find(function (item) {\n      return item && item.key && item.key.fromMe !== true;\n    }) || inner[inner.length - 1] || {};\n  }\n  if (inner.data && (inner.key == null)) return unwrap(inner);\n  return inner;\n}\n\nfunction realJid(key, inner, raw) {\n  const k = key || {};\n  const candidates = [\n    k.remoteJidAlt,\n    k.senderPn,\n    k.participantAlt,\n    k.remoteJid,\n    inner.remoteJidAlt,\n    inner.senderPn,\n    inner.remoteJid,\n    raw.sender,\n    raw.senderPn\n  ];\n  let lidFallback = '';\n  for (let i = 0; i < candidates.length; i++) {\n    const v = String(candidates[i] || '');\n    if (!v) continue;\n    if (v.indexOf('@g.us') >= 0) return v;\n    if (v.indexOf('@lid') >= 0) {\n      if (!lidFallback) lidFallback = v;\n      continue;\n    }\n    if (v.indexOf('@s.whatsapp.net') >= 0 || v.indexOf('@c.us') >= 0) return v;\n    if (/^\\d{10,15}$/.test(v.replace(/\\D/g, '')) && v.indexOf('@') < 0) return v + '@s.whatsapp.net';\n  }\n  return lidFallback;\n}\n\nfunction isStopText(text) {\n  const t = String(text || '').toLowerCase().replace(/[^\\w\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (!t) return false;\n  return (\n    t === 'stop' ||\n    t === 'unsubscribe' ||\n    t === 'opt out' ||\n    t === 'optout' ||\n    t.indexOf('stop messages') >= 0 ||\n    t.indexOf('do not message') >= 0 ||\n    t.indexOf('dont message') >= 0 ||\n    t.indexOf(\"don't message\") >= 0 ||\n    t.indexOf('stop promotions') >= 0\n  );\n}\n\n/**\n * Meta Click-to-WhatsApp / Ads / automated business-chat entry.\n * Same as groups: do not AI-reply and do not post a new lead to the staff group.\n */\nfunction collectContextBlobs(msg, inner, raw) {\n  const out = [];\n  const push = function (v) {\n    if (v && typeof v === 'object') out.push(v);\n  };\n  push(inner.contextInfo);\n  push(inner.adReferral);\n  push(raw.contextInfo);\n  push(raw.adReferral);\n  push(msg && msg.messageContextInfo);\n  if (msg && typeof msg === 'object') {\n    const keys = Object.keys(msg);\n    for (let i = 0; i < keys.length; i++) {\n      const part = msg[keys[i]];\n      if (!part || typeof part !== 'object') continue;\n      push(part.contextInfo);\n      push(part.externalAdReply);\n      if (part.contextInfo && part.contextInfo.externalAdReply) {\n        push(part.contextInfo.externalAdReply);\n      }\n    }\n  }\n  // Cloud API style\n  push(inner.referral);\n  push(msg && msg.referral);\n  if (Array.isArray(inner.messages) && inner.messages[0]) {\n    push(inner.messages[0].referral);\n  }\n  return out;\n}\n\nfunction isMetaAdAutomated(msg, inner, raw) {\n  const blobs = collectContextBlobs(msg, inner, raw);\n  for (let i = 0; i < blobs.length; i++) {\n    const c = blobs[i];\n    if (!c || typeof c !== 'object') continue;\n    if (c.ctwaClid || c.ctwa_clid || c.ctwaPayload || c.ctwaSignals) return true;\n    if (c.sourceId || c.source_id || c.sourceUrl || c.source_url) {\n      const st = String(c.sourceType || c.source_type || c.source || '').toLowerCase();\n      if (\n        st &&\n        (st.indexOf('ad') >= 0 ||\n          st.indexOf('ctwa') >= 0 ||\n          st.indexOf('fb') >= 0 ||\n          st.indexOf('ig') >= 0 ||\n          st.indexOf('meta') >= 0)\n      ) {\n        return true;\n      }\n    }\n    const conv = String(\n      c.conversionSource ||\n        c.entryPointConversionSource ||\n        c.entryPointConversionExternalSource ||\n        c.conversion_source ||\n        ''\n    ).toLowerCase();\n    if (\n      conv.indexOf('ad') >= 0 ||\n      conv.indexOf('ctwa') >= 0 ||\n      conv.indexOf('fb_') >= 0 ||\n      conv.indexOf('ig_') >= 0 ||\n      conv === 'fb_ads' ||\n      conv === 'ig_ads'\n    ) {\n      return true;\n    }\n    if (c.externalAdReply || c.external_ad_reply) return true;\n    if (c.conversionData || c.conversion_data) return true;\n    const app = String(c.entryPointConversionApp || '').toLowerCase();\n    if (app === 'instagram' || app === 'facebook' || app === 'fb' || app === 'ig') {\n      if (conv || c.ctwaClid || c.ctwa_clid || c.externalAdReply) return true;\n    }\n  }\n  // Top-level Evolution / Cloud fields sometimes flattened onto data\n  const flat = Object.assign({}, inner, raw, typeof msg === 'object' ? msg : {});\n  if (flat.ctwaClid || flat.ctwa_clid) return true;\n  if (String(flat.conversionSource || '').toLowerCase().indexOf('ad') >= 0) return true;\n  if (String(flat.entryPointConversionSource || '').toLowerCase().indexOf('ctwa') >= 0) {\n    return true;\n  }\n  return false;\n}\n\nfunction isProtocolNoise(msg, inner) {\n  if (!msg || typeof msg !== 'object') return false;\n  if (msg.protocolMessage || msg.senderKeyDistributionMessage || msg.reactionMessage) {\n    return true;\n  }\n  const t = String(inner.messageType || inner.type || '').toLowerCase();\n  return (\n    t === 'protocolmessage' ||\n    t === 'senderkeydistributionmessage' ||\n    t === 'reactionmessage' ||\n    t === 'e2enotification'\n  );\n}\n\nconst raw = $input.first().json || {};\nconst inner = unwrap(raw);\nconst key = inner.key || {};\nconst msg = inner.message || inner;\nconst chatJid = String(key.remoteJid || inner.remoteJid || '');\nconst jid = realJid(key, inner, raw);\nconst fromMe = key.fromMe === true;\nconst isGroup =\n  chatJid.indexOf('@g.us') >= 0 ||\n  chatJid.indexOf('@broadcast') >= 0 ||\n  chatJid.indexOf('@newsletter') >= 0 ||\n  String(jid).indexOf('@g.us') >= 0;\nconst isStatus = chatJid.indexOf('status@broadcast') >= 0;\nconst isMetaAd = !fromMe && isMetaAdAutomated(msg, inner, raw);\nconst isNoise = isProtocolNoise(msg, inner);\nconst phoneRaw = jid.replace(/@.*$/, '').replace(/\\D/g, '');\n// Prefer real mobile numbers; drop WhatsApp @lid ids (too long / not dialable).\nlet phone = phoneRaw;\nif (phone.length > 15) phone = '';\nif (phone.indexOf('91') === 0 && phone.length >= 12) phone = phone.slice(-10);\nif (phone.length > 10) phone = phone.slice(-10);\nif (phone.length === 10) phone = '91' + phone;\nconst name = String(inner.pushName || raw.pushName || '').trim();\nconst voice = hasVoice(msg);\nlet text = String(pickText(msg) || '').trim();\nif (!text && voice) text = '[voice note]';\nconst optOut = !fromMe && isStopText(text);\nlet skipReason = '';\nif (isGroup) skipReason = 'group';\nelse if (isStatus) skipReason = 'status';\nelse if (isMetaAd) skipReason = 'metaAd';\nelse if (isNoise) skipReason = 'protocol';\nelse if (!phone) skipReason = 'noPhone';\nconst skip = skipReason !== '';\nconst staffReply = !skip && fromMe;\nconst choice = parseInt(text, 10);\nconst wantsBook = !skip && !fromMe && String(choice) === text && choice >= 1 && choice <= 12;\n\nreturn [{\n  json: Object.assign({}, CONFIG, {\n    skip: skip,\n    skipReason: skipReason,\n    staffReply: staffReply,\n    optOut: optOut,\n    voice: voice,\n    wantsBook: wantsBook,\n    slotIndex: wantsBook ? choice - 1 : -1,\n    phone: phone,\n    name: name,\n    text: text,\n    jid: jid,\n    isMetaAd: isMetaAd\n  })\n}];\n"
       },
       "id": "code-parse-ai",
       "name": "Parse inbound",
@@ -118,7 +118,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -149,7 +149,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -173,7 +173,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inbound = $('Parse inbound').first().json || {};\nconst up = $input.first().json || {};\nconst groupJid =\n  up.staffGroupJid || '120363426681576301@g.us';\nconst optOut = inbound.optOut === true || up.optOut === true;\nconst shouldReply = up.shouldReply !== false && !optOut;\nconst sendWelcome = shouldReply && up.isNewLead === true && !!(up.welcomeText || '').trim();\nreturn [{\n  json: Object.assign({}, inbound, {\n    shouldReply: shouldReply,\n    sendWelcome: sendWelcome,\n    notifyGroup: up.notifyGroup === true,\n    staffGroupJid: groupJid,\n    groupText: up.groupText || '',\n    welcomeText: up.welcomeText || '',\n    optOutText: up.optOutText || '',\n    number: inbound.phone,\n    reply: up.groupText || '',\n    isReturningPatient: up.isReturningPatient === true,\n    isNewLead: up.isNewLead === true,\n    optOut: optOut\n  })\n}];\n"
+        "jsCode": "const inbound = $('Parse inbound').first().json || {};\nconst up = $input.first().json || {};\nconst groupJid =\n  up.staffGroupJid || '120363426681576301@g.us';\nconst optOut = inbound.optOut === true || up.optOut === true;\nconst shouldReply = up.shouldReply !== false && !optOut;\nconst sendWelcome =\n  up.sendWelcome === true &&\n  !optOut &&\n  !!(up.welcomeText || '').trim();\nreturn [{\n  json: Object.assign({}, inbound, {\n    shouldReply: shouldReply,\n    sendWelcome: sendWelcome,\n    notifyGroup: up.notifyGroup === true,\n    staffGroupJid: groupJid,\n    groupText: up.groupText || '',\n    welcomeText: up.welcomeText || '',\n    optOutText: up.optOutText || '',\n    number: inbound.phone,\n    reply: up.groupText || '',\n    isReturningPatient: up.isReturningPatient === true,\n    isNewLead: up.isNewLead === true,\n    optOut: optOut\n  })\n}];\n"
       },
       "id": "code-after-up",
       "name": "Prepare after upsert",
@@ -242,7 +242,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -322,7 +322,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -402,7 +402,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -480,7 +480,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             }
           ]
         },
@@ -497,7 +497,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const ctx = $('Get AI context').first().json || {};\nconst inbound = $('Parse inbound').first().json || {};\nconst slots = (ctx.slots || []).slice(0, 8).map(function (s, i) {\n  return (i + 1) + '. ' + s.start;\n});\nconst maps = (ctx.evolution && ctx.evolution.googleMapsUrl) || ctx.googleMapsUrl || '';\nconst treatments = (ctx.campaign && ctx.campaign.treatments) || '';\nconst system =\n  'You are the WhatsApp assistant for a dental clinic named ' +\n  (ctx.clinicName || 'the clinic') +\n  '. Speak briefly and warmly in 1-3 short messages. Never book an appointment yourself. ' +\n  'Do not send welcome packs, appointment confirmations, reminders, birthday wishes, Google review requests, or staff-group alerts \u2014 those are sent only from saved clinic templates. You only chat: answer questions, collect name and concern, and say staff will call. ' +\n  'Do not invent prices. If they ask about cost, say staff will discuss that when they call or at the clinic. ' +\n  'You may name treatments from this list only, with no prices: ' + treatments + '. ' +\n  'If you do not yet have their real name, politely ask for it. ' +\n  'Ask what dental concern they have. ' +\n  'If the inbound text is [voice note], thank them and ask them to type the concern, or say staff will call. ' +\n  'If the person is interested or says yes, thank them and say the receptionist or doctor will call to confirm. ' +\n  'If they want to reschedule, say staff will call to pick a new time. ' +\n  'If they say they already left a Google review, or reply DONE / reviewed / review done after a review request, thank them warmly and include review_done in events. ' +\n  'You may share the clinic Google Maps link if they ask where you are: ' + maps + '. ' +\n  'You may mention a clinic flyer only if campaign.sendFlyerWithChat is true. ' +\n  'Reply in the patient language. Return ONLY JSON with keys: ' +\n  'reply (string), attachFlyer (boolean), events (array of {type, appointmentId?, name?, interest?}). ' +\n  'type must be one of: interested, reschedule, review_done, profile.';\n\nconst user =\n  'Incoming WhatsApp from ' + inbound.phone +\n  ' name=' + (inbound.name || '') +\n  ' text=' + (inbound.text || '') +\n  '\\nLead: ' + JSON.stringify(ctx.lead || null) +\n  '\\nPatient: ' + JSON.stringify(ctx.patient || null) +\n  '\\nUpcoming appointments: ' + JSON.stringify(ctx.upcomingAppointments || []) +\n  '\\nFree slots (info only): ' + slots.join('\\n') +\n  '\\nGoogle review URL: ' + ((ctx.campaign && ctx.campaign.googleReviewUrl) || '') +\n  '\\nSend flyer allowed: ' + !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && ctx.flyer && ctx.flyer.url);\n\nreturn [{\n  json: {\n    evoBase: inbound.evoBase,\n    evoKey: inbound.evoKey,\n    evoInstance: inbound.evoInstance,\n    pbBase: inbound.pbBase,\n    bookingToken: inbound.bookingToken,\n    phone: inbound.phone,\n    name: inbound.name,\n    number: inbound.phone,\n    flyerUrl: ctx.flyer && ctx.flyer.url\n      ? (inbound.pbBase + ctx.flyer.url)\n      : ((ctx.campaign && ctx.campaign.marketingImageUrl) || ''),\n    sendFlyerAllowed: !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && (\n      (ctx.flyer && ctx.flyer.file) || (ctx.campaign && ctx.campaign.marketingImageUrl)\n    )),\n    googleMapsUrl: maps,\n    model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n    openRouterBody: {\n      model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: system },\n        { role: 'user', content: user }\n      ]\n    }\n  }\n}];\n"
+        "jsCode": "const ctx = $('Get AI context').first().json || {};\nconst inbound = $('Parse inbound').first().json || {};\nconst slots = (ctx.slots || []).slice(0, 8).map(function (s, i) {\n  return (i + 1) + '. ' + s.start;\n});\nconst maps = (ctx.evolution && ctx.evolution.googleMapsUrl) || ctx.googleMapsUrl || '';\nconst treatments = (ctx.campaign && ctx.campaign.treatments) || '';\nconst patient = ctx.patient || null;\nconst upcoming = ctx.upcomingAppointments || [];\nconst knownName = (patient && patient.title) || (ctx.lead && ctx.lead.title) || inbound.name || '';\nconst isKnownPatient = !!(patient && patient.id);\n\nconst system =\n  'You are the WhatsApp assistant for a dental clinic named ' +\n  (ctx.clinicName || 'the clinic') +\n  '. Speak briefly and warmly in 1-3 short messages. Never book an appointment yourself. ' +\n  'Do not send welcome packs, appointment confirmations, reminders, birthday wishes, Google review requests, or staff-group alerts \u2014 those are sent only from saved clinic templates / the clinic system. You only chat with the patient. ' +\n  'Do not invent prices. If they ask about cost, say staff will discuss that when they call or at the clinic. ' +\n  'You may name treatments from this list only, with no prices: ' + treatments + '. ' +\n  (isKnownPatient\n    ? ('This WhatsApp number already belongs to an existing patient named \"' + knownName + '\". ' +\n      'Greet them by that name. Do NOT ask for their name again. Do NOT treat them as a new lead. ')\n    : 'If you do not yet have their real name, politely ask for it. Ask what dental concern they have. ') +\n  'If the inbound text is [voice note], thank them and ask them to type the concern, or say staff will call. ' +\n  'If the person is interested or says yes, thank them and say the receptionist or doctor will call to confirm. ' +\n  'RESCHEDULE FLOW (important): ' +\n  '1) If they want to reschedule but have NOT given a preferred day/time yet: briefly acknowledge, mention any upcoming appointment you know, ask them to reply with the day and time they prefer, and include events:[{type:\"reschedule\"}] (no note yet). ' +\n  '2) If they include or reply with a preferred day/time: thank them, say staff will call to confirm that slot, and include events:[{type:\"reschedule\", note:\"<their preferred day/time in their own words>\"}]. Always put their preference in note. ' +\n  'If they say they already left a Google review, or reply DONE / reviewed / review done after a review request, thank them warmly and include review_done in events. ' +\n  'You may share the clinic Google Maps link if they ask where you are: ' + maps + '. ' +\n  'You may mention a clinic flyer only if campaign.sendFlyerWithChat is true. ' +\n  'Reply in the patient language. Return ONLY JSON with keys: ' +\n  'reply (string), attachFlyer (boolean), events (array of {type, appointmentId?, name?, interest?, note?}). ' +\n  'type must be one of: interested, reschedule, review_done, profile.';\n\nconst user =\n  'Incoming WhatsApp from ' + inbound.phone +\n  ' name=' + knownName +\n  ' text=' + (inbound.text || '') +\n  '\\nKnown existing patient: ' + (isKnownPatient ? 'YES' : 'NO') +\n  '\\nLead: ' + JSON.stringify(ctx.lead || null) +\n  '\\nPatient: ' + JSON.stringify(patient) +\n  '\\nUpcoming appointments: ' + JSON.stringify(upcoming) +\n  '\\nFree slots (info only): ' + slots.join('\\n') +\n  '\\nGoogle review URL: ' + ((ctx.campaign && ctx.campaign.googleReviewUrl) || '') +\n  '\\nSend flyer allowed: ' + !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && ctx.flyer && ctx.flyer.url);\n\nreturn [{\n  json: {\n    evoBase: inbound.evoBase,\n    evoKey: inbound.evoKey,\n    evoInstance: inbound.evoInstance,\n    pbBase: inbound.pbBase,\n    bookingToken: inbound.bookingToken,\n    phone: inbound.phone,\n    name: knownName,\n    number: inbound.phone,\n    flyerUrl: ctx.flyer && ctx.flyer.url\n      ? (inbound.pbBase + ctx.flyer.url)\n      : ((ctx.campaign && ctx.campaign.marketingImageUrl) || ''),\n    sendFlyerAllowed: !!(ctx.campaign && ctx.campaign.sendFlyerWithChat && (\n      (ctx.flyer && ctx.flyer.file) || (ctx.campaign && ctx.campaign.marketingImageUrl)\n    )),\n    googleMapsUrl: maps,\n    model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n    openRouterBody: {\n      model: (ctx.campaign && ctx.campaign.openrouterModel) || 'openai/gpt-4o-mini',\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: system },\n        { role: 'user', content: user }\n      ]\n    }\n  }\n}];\n"
       },
       "id": "code-ai-prompt",
       "name": "Build AI prompt",
@@ -565,7 +565,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const prev = $('Build AI prompt').first().json || {};\nconst inbound = $('Parse inbound').first().json || {};\nconst raw = $input.first().json || {};\nlet content = '';\nif (raw.choices && raw.choices[0] && raw.choices[0].message) {\n  content = raw.choices[0].message.content || '';\n}\nlet parsed = { reply: '', attachFlyer: false, events: [] };\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed.reply = content || 'Thank you. Our receptionist will help you shortly.';\n}\nconst events = parsed.events || [];\nif (parsed.markInterested) events.push({ type: 'interested' });\nif (parsed.reschedule) events.push({ type: 'reschedule' });\nif (parsed.reviewDone) events.push({ type: 'review_done' });\n\n// Deterministic: patient replies DONE / reviewed after our review request.\nconst inboundText = String(inbound.text || '').toLowerCase().trim();\nconst reviewDonePhrase =\n  /^(done|reviewed|review done|yes done|i (left|gave|posted|submitted) (a )?review|left a review|gave review)\\b/.test(\n    inboundText\n  ) ||\n  inboundText === 'done' ||\n  inboundText.includes('left a review') ||\n  inboundText.includes('gave a review') ||\n  inboundText.includes('posted a review');\nif (reviewDonePhrase && !events.some(function (e) { return e && e.type === 'review_done'; })) {\n  events.push({ type: 'review_done' });\n  if (!parsed.reply || !String(parsed.reply).trim()) {\n    parsed.reply = 'Thank you so much for leaving a review \u2014 it means a lot to our team! \ud83d\ude4f';\n  }\n}\n\nevents.push({ type: 'assistant_replied' });\n\nreturn [{\n  json: {\n    evoBase: prev.evoBase,\n    evoKey: prev.evoKey,\n    evoInstance: prev.evoInstance,\n    phone: prev.phone,\n    name: prev.name,\n    number: prev.phone,\n    reply: String(parsed.reply || 'Thank you. Our team will call you to confirm.'),\n    attachFlyer: !!(parsed.attachFlyer && prev.sendFlyerAllowed && prev.flyerUrl),\n    flyerUrl: prev.flyerUrl,\n    events: events,\n    event0: events[0] || null,\n    event1: events[1] || null,\n    event2: events[2] || null\n  }\n}];\n"
+        "jsCode": "const prev = $('Build AI prompt').first().json || {};\nconst inbound = $('Parse inbound').first().json || {};\nconst raw = $input.first().json || {};\nlet content = '';\nif (raw.choices && raw.choices[0] && raw.choices[0].message) {\n  content = raw.choices[0].message.content || '';\n}\nlet parsed = { reply: '', attachFlyer: false, events: [] };\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed.reply = content || 'Thank you. Our receptionist will help you shortly.';\n}\nconst events = parsed.events || [];\nif (parsed.markInterested) events.push({ type: 'interested' });\nif (parsed.reschedule) events.push({ type: 'reschedule' });\nif (parsed.reviewDone) events.push({ type: 'review_done' });\n\nconst inboundText = String(inbound.text || '').trim();\nconst inboundLower = inboundText.toLowerCase();\n\n// Deterministic: patient replies DONE / reviewed after our review request.\nconst reviewDonePhrase =\n  /^(done|reviewed|review done|yes done|i (left|gave|posted|submitted) (a )?review|left a review|gave review)\\b/.test(\n    inboundLower\n  ) ||\n  inboundLower === 'done' ||\n  inboundLower.includes('left a review') ||\n  inboundLower.includes('gave a review') ||\n  inboundLower.includes('posted a review');\nif (reviewDonePhrase && !events.some(function (e) { return e && e.type === 'review_done'; })) {\n  events.push({ type: 'review_done' });\n  if (!parsed.reply || !String(parsed.reply).trim()) {\n    parsed.reply = 'Thank you so much for leaving a review \u2014 it means a lot to our team!';\n  }\n}\n\n// If AI flagged reschedule but forgot note, keep a useful preference when the message isn't only \"please reschedule\".\nconst rescheduleEv = events.find(function (e) { return e && e.type === 'reschedule'; });\nif (rescheduleEv) {\n  const note = String(rescheduleEv.note || rescheduleEv.preferredTime || '').trim();\n  if (!note && inboundText) {\n    const onlyAsk =\n      /^(hi|hello|hey)?[\\s,]*(i (want to |would like to |need to )?)?(please )?reschedule( (my )?appointment)?[.!?]*$/i.test(\n        inboundText\n      ) ||\n      /^(can (we|i) |please )?(change|move) (my )?(appointment|time|slot)[.!?]*$/i.test(inboundText);\n    if (!onlyAsk) {\n      rescheduleEv.note = inboundText.slice(0, 400);\n    }\n  }\n}\n\nevents.push({ type: 'assistant_replied' });\n\nreturn [{\n  json: {\n    evoBase: prev.evoBase,\n    evoKey: prev.evoKey,\n    evoInstance: prev.evoInstance,\n    phone: prev.phone,\n    name: prev.name,\n    number: prev.phone,\n    reply: String(parsed.reply || 'Thank you. Our team will call you to confirm.'),\n    attachFlyer: !!(parsed.attachFlyer && prev.sendFlyerAllowed && prev.flyerUrl),\n    flyerUrl: prev.flyerUrl,\n    events: events,\n    event0: events[0] || null,\n    event1: events[1] || null,\n    event2: events[2] || null\n  }\n}];\n"
       },
       "id": "code-ai-result",
       "name": "Parse AI result",
@@ -585,7 +585,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -636,7 +636,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -660,7 +660,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const prev = $input.first().json || {};\nconst events = prev.events || [];\nif (!events.length) return [];\nreturn events.map(function (ev) {\n  return {\n    json: {\n      phone: prev.phone,\n      name: prev.name,\n      type: ev.type,\n      appointmentId: ev.appointmentId || '',\n      name: ev.name || prev.name,\n      interest: ev.interest || ''\n    }\n  };\n});\n"
+        "jsCode": "const prev = $('Parse AI result').first().json || {};\nconst events = prev.events || [];\nif (!events.length) return [];\nreturn events.map(function (ev) {\n  return {\n    json: {\n      phone: prev.phone,\n      name: ev.name || prev.name || '',\n      type: ev.type,\n      appointmentId: ev.appointmentId || '',\n      interest: ev.interest || '',\n      note: ev.note || ev.preferredTime || '',\n      preferredTime: ev.preferredTime || ev.note || '',\n      evoBase: prev.evoBase,\n      evoKey: prev.evoKey,\n      evoInstance: prev.evoInstance\n    }\n  };\n});\n"
       },
       "id": "code-ai-events",
       "name": "Split AI events",
@@ -680,7 +680,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -690,7 +690,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, appointmentId: $json.appointmentId, interest: $json.interest, leadId: $json.leadId }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, appointmentId: $json.appointmentId, interest: $json.interest, note: $json.note, preferredTime: $json.preferredTime, leadId: $json.leadId }) }}",
         "options": {}
       },
       "id": "http-ai-event",
@@ -699,6 +699,66 @@
       "typeVersion": 4.2,
       "position": [
         3840,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inbound = $('Parse inbound').first().json || {};\nconst res = $input.first().json || {};\nif (res.notifyGroup !== true || !String(res.groupText || '').trim()) {\n  return [];\n}\nreturn [{\n  json: {\n    evoBase: inbound.evoBase,\n    evoKey: inbound.evoKey,\n    evoInstance: inbound.evoInstance,\n    number: res.staffGroupJid || '120363426681576301@g.us',\n    reply: res.groupText\n  }\n}];\n"
+      },
+      "id": "code-resched-group",
+      "name": "Prepare reschedule group",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "wait-resched-group",
+      "name": "Wait before reschedule group",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4320,
+        480
+      ],
+      "webhookId": "wait-resched-group"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($json.evoBase || 'http://evolution-api:8080') + '/message/sendText/' + ($json.evoInstance || 'clinic_default') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {}
+      },
+      "id": "http-evo-resched-group",
+      "name": "Send reschedule group alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4560,
         480
       ]
     }
@@ -994,6 +1054,11 @@
             "node": "Attach flyer?",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Split AI events",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1007,24 +1072,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Split AI events",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send flyer image": {
-      "main": [
-        [
-          {
-            "node": "Split AI events",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Split AI events": {
@@ -1032,6 +1080,39 @@
         [
           {
             "node": "Record AI event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record AI event": {
+      "main": [
+        [
+          {
+            "node": "Prepare reschedule group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare reschedule group": {
+      "main": [
+        [
+          {
+            "node": "Wait before reschedule group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before reschedule group": {
+      "main": [
+        [
+          {
+            "node": "Send reschedule group alert",
             "type": "main",
             "index": 0
           }

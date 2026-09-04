@@ -2,7 +2,7 @@ name: chatdent
 description: "Dental Clinic Management System"
 publish_to: "none"
 
-version: 0.10.2
+version: 0.10.4+108
 
 environment:
   sdk: ">=3.4.4 <4.0.0"
@@ -73,6 +73,14 @@ msix_config:
 
 flutter:
   fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Outfit-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-SemiBold.ttf
+          weight: 600
     - family: DentalIcons
       fonts:
         - asset: assets/fonts/DentalIcons.ttf

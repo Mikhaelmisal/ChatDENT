@@ -57,7 +57,12 @@ _b.assertToken = function (e) {
 
 _b.parseHours = function () {
   const raw = _b.settingValue("clinic_hours___", "")
-  const fallbackWeek = { open: 600, close: 1140, breakStart: 810, breakEnd: 870 }
+  const fallbackWeek = {
+    open: 600,
+    close: 1140,
+    breakStart: 840,
+    breakEnd: 1020,
+  }
   let parsed = null
   try {
     if (raw && typeof raw === "object") parsed = raw
@@ -66,7 +71,7 @@ _b.parseHours = function () {
   if (!parsed || !parsed.week) {
     parsed = {
       utcOffsetMinutes: 330,
-      slotMinutes: 15,
+      slotMinutes: 20,
       defaultOperatorId: "",
       closedDates: [],
       week: {
@@ -234,7 +239,7 @@ _b.aptStartMs = function (a) {
 }
 
 _b.aptEndMs = function (a) {
-  return _b.aptStartMs(a) + (a.duration || 15) * 60000
+  return _b.aptStartMs(a) + (a.duration || 20) * 60000
 }
 
 _b.overlaps = function (a0, a1, b0, b1) {
@@ -465,12 +470,53 @@ _b.digitsPhone = function (raw) {
   return String(raw || "").replace(/\D/g, "")
 }
 
+/** Short “I left a review” replies — must not ping the staff leads group. */
+_b.isReviewDoneText = function (raw) {
+  const t = String(raw || "").toLowerCase().trim()
+  if (!t) return false
+  if (
+    /^(done|reviewed|review done|yes done|ok done|thank you|thanks|ok|okay)[.!]*$/.test(t)
+  ) {
+    return true
+  }
+  return (
+    t.indexOf("left a review") >= 0 ||
+    t.indexOf("gave a review") >= 0 ||
+    t.indexOf("posted a review") >= 0 ||
+    t.indexOf("submitted a review") >= 0 ||
+    t === "i reviewed" ||
+    t === "review submitted"
+  )
+}
+
+_b.phoneTail10 = function (raw) {
+  const d = _b.digitsPhone(raw)
+  if (d.length >= 10) return d.slice(-10)
+  return d
+}
+
 _b.persistPhone = function (raw) {
   let d = _b.digitsPhone(raw)
+  // Ignore WhatsApp @lid numeric ids (not real phone numbers).
+  if (d.length > 15) return ""
   if (d.indexOf("91") === 0 && d.length >= 12) d = d.slice(2, 12)
   if (d.length > 10) d = d.slice(-10)
   if (d.length === 10) return "91" + d
   return d
+}
+
+_b.matchPhone = function (stored, want) {
+  const a = _b.persistPhone(stored)
+  const b = _b.persistPhone(want)
+  if (a && b && a === b) return true
+  const ta = _b.phoneTail10(stored)
+  const tb = _b.phoneTail10(want)
+  if (ta.length === 10 && tb.length === 10 && ta === tb) return true
+  // Patient phone may be concatenated (multiple numbers) or stored oddly.
+  const storedDigits = _b.digitsPhone(stored)
+  if (tb.length === 10 && storedDigits.indexOf(tb) >= 0) return true
+  if (ta.length === 10 && _b.digitsPhone(want).indexOf(ta) >= 0) return true
+  return false
 }
 
 _b.queryGet = function (e, key, fallback) {
@@ -525,7 +571,8 @@ _b.flyerInfo = function () {
   }
 }
 
-_b.hoursMs = 12 * 3600 * 1000
+_b.AI_COOLDOWN_MS = 3 * 60 * 1000
+_b.STAFF_PAUSE_MS = 4 * 3600 * 1000
 
 _b.isQuietHours = function () {
   const campaign = _b.parseCampaign()
@@ -543,12 +590,15 @@ _b.isQuietHours = function () {
 
 _b.shouldReply = function (lead) {
   if (lead && lead.whatsappConsent === false) return false
-  if (lead && lead.assistantPaused === true) return false
+  if (lead && lead.assistantPaused === true) {
+    const last = Number(lead.lastHumanAt) || 0
+    if (!last || Date.now() - last < _b.STAFF_PAUSE_MS) return false
+  }
   if (_b.isQuietHours()) return false
   if (!lead || !lead.lastAssistantAt) return true
   const last = Number(lead.lastAssistantAt) || 0
   if (!last) return true
-  return Date.now() - last >= _b.hoursMs
+  return Date.now() - last >= _b.AI_COOLDOWN_MS
 }
 
 _b.groupAlertText = function (isReturning, phone, name, note) {
@@ -563,6 +613,22 @@ _b.groupAlertText = function (isReturning, phone, name, note) {
     extra,
     fallback,
   )
+}
+
+_b.rescheduleGroupText = function (phone, name, note) {
+  const who = name ? name : "—"
+  const preference = String(note || "").replace(/\s+/g, " ").trim().slice(0, 400)
+  let text =
+    "Want to reschedule\n\n" +
+    "Name: " + who + "\n" +
+    "Phone: " + (phone || "—") + "\n"
+  if (preference) {
+    text += "Preferred time: " + preference + "\n"
+  } else {
+    text += "Note: Patient asked to reschedule — assistant is asking for their preferred day/time.\n"
+  }
+  text += "Please call from the clinic number. Do not reply in this group."
+  return text
 }
 
 _b.dueMarketing = function () {
@@ -594,15 +660,10 @@ _b.dueMarketing = function () {
   return out
 }
 
-_b.matchPhone = function (stored, want) {
-  const a = _b.persistPhone(stored)
-  const b = _b.persistPhone(want)
-  return a && b && a === b
-}
-
 _b.findPatientByPhone = function (phone) {
   const patients = _b.listStore("patients")
   for (let i = 0; i < patients.length; i++) {
+    if (patients[i].archived === true) continue
     if (_b.matchPhone(patients[i].phone, phone)) return patients[i]
   }
   return null
@@ -617,15 +678,26 @@ _b.findLeadByPhone = function (phone) {
   return null
 }
 
-_b.daysUntilBirthday = function (birth, now) {
+_b.clinicLocalNow = function () {
+  const hours = _b.parseHours()
+  const offset = hours.utcOffsetMinutes || 330
+  const d = new Date(Date.now() + offset * 60000)
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+  }
+}
+
+_b.daysUntilBirthday = function (birth, nowP) {
   const n = Number(birth)
   if (!n || n < 10000) return null
   const month = Math.floor((n % 10000) / 100)
   const day = n % 100
   if (month < 1 || day < 1) return null
-  const y = now.getUTCFullYear()
-  const m = now.getUTCMonth() + 1
-  const d = now.getUTCDate()
+  const y = nowP.year
+  const m = nowP.month
+  const d = nowP.day
   let next = Date.UTC(y, month - 1, day)
   const today = Date.UTC(y, m - 1, d)
   if (today > next) next = Date.UTC(y + 1, month - 1, day)
@@ -652,7 +724,7 @@ _b.aiContext = function (phone) {
       upcoming.push({
         id: a.id,
         start: new Date(start).toISOString(),
-        duration: a.duration || 15,
+        duration: a.duration || 20,
         rescheduleRequested: a.rescheduleRequested === true,
       })
     }
@@ -679,9 +751,9 @@ _b.aiContext = function (phone) {
     evolution: { instance: evo.instance, googleMapsUrl: evo.googleMapsUrl || "" },
     shouldReply: _b.shouldReply(lead),
     instruction:
-      "Never create a calendar booking. Never mention prices, fees, packages, discounts, or cost. Only a doctor may discuss fees in person or on a call. If they ask the price, say the doctor will explain on the call. If the person is interested or says yes, thank them and say staff will call. If they send a voice note, ask them to type the concern or say staff will call. Treatments you may name (no prices): " +
+      "Never create a calendar booking. Never mention prices, fees, packages, discounts, or cost. Only a doctor may discuss fees in person or on a call. If they ask the price, say the doctor will explain on the call. If patient is set, this is an existing clinic patient — use their name and do not treat them as new. If they are interested or say yes, thank them and say staff will call. If they send a voice note, ask them to type the concern or say staff will call. Treatments you may name (no prices): " +
       (campaign.treatments || "") +
-      ". If they want to reschedule, staff will call. If they left a Google review, thank them.",
+      ". If they want to reschedule, ask their preferred day/time then staff will confirm. If they left a Google review, thank them.",
   }
 }
 
@@ -729,7 +801,7 @@ _b.applyAiEvent = function (body) {
     let lead = _b.findLeadByPhone(phone)
     if (!lead) {
       const id = _b.newId()
-      lead = { id: id, phone: phone, title: body.name || "", source: "whatsapp", assistantPaused: true, stage: "contacted" }
+      lead = { id: id, phone: phone, title: body.name || "", source: "whatsapp", assistantPaused: true, lastHumanAt: Date.now(), stage: "contacted" }
       _b.upsertData(id, "leads", lead)
       return { ok: true }
     }
@@ -767,7 +839,7 @@ _b.applyAiEvent = function (body) {
   if (type === "birthday_sent") {
     const p = _b.findPatientByPhone(phone)
     if (!p) throw new BadRequestError("patient not found")
-    p.birthdayMsgYear = new Date().getUTCFullYear()
+    p.birthdayMsgYear = _b.clinicLocalNow().year
     _b.upsertData(p.id, "patients", p)
     return { ok: true }
   }
@@ -788,16 +860,20 @@ _b.applyAiEvent = function (body) {
   }
   if (type === "reschedule") {
     let id = body.appointmentId
+    const patient = _b.findPatientByPhone(phone)
+    const note = String(
+      body.note || body.preferredTime || body.interest || "",
+    ).trim()
     if (!id) {
-      const p = _b.findPatientByPhone(phone)
-      if (!p) throw new BadRequestError("appointmentId required")
+      if (!patient) throw new BadRequestError("appointmentId required")
       const apts = _b.listStore("appointments")
       const now = Date.now()
       let soonest = null
       let soonestMs = 0
       for (let i = 0; i < apts.length; i++) {
         const a = apts[i]
-        if (a.archived === true || a.patientID !== p.id) continue
+        if (a.archived === true || a.patientID !== patient.id) continue
+        if (a.isDone === true || a.isNoShow === true) continue
         const start = _b.aptStartMs(a)
         if (start <= now) continue
         if (!soonest || start < soonestMs) {
@@ -811,18 +887,45 @@ _b.applyAiEvent = function (body) {
     const rec = $app.findRecordById("data", id)
     const data = _b.asObj(rec.get("data"))
     data.rescheduleRequested = true
+    if (note) data.rescheduleNote = note
     data.id = rec.id
     rec.set("data", data)
     $app.save(rec)
-    return { ok: true }
+
+    let lead = _b.findLeadByPhone(phone)
+    const leadId = lead ? lead.id : _b.newId()
+    const leadData = Object.assign({}, lead || {}, {
+      id: leadId,
+      phone: phone || (lead && lead.phone) || "",
+      title:
+        (patient && patient.title) ||
+        body.name ||
+        (lead && lead.title) ||
+        "",
+      source: (lead && lead.source) || "whatsapp",
+      stage: "reschedule",
+      rescheduleNote: note || (lead && lead.rescheduleNote) || "",
+      patientID: (patient && patient.id) || (lead && lead.patientID) || "",
+    })
+    _b.upsertData(leadId, "leads", leadData)
+
+    const evo = _b.parseEvo()
+    const who = leadData.title || "—"
+    return {
+      ok: true,
+      appointmentId: id,
+      notifyGroup: true,
+      staffGroupJid: evo.staffGroupJid || "120363426681576301@g.us",
+      groupText: _b.rescheduleGroupText(phone, who, note),
+    }
   }
   throw new BadRequestError("unknown event type")
 }
 
 _b.dueBirthdays = function (withinDays) {
   if (_b.isQuietHours()) return []
-  const now = new Date()
-  const year = now.getUTCFullYear()
+  const nowP = _b.clinicLocalNow()
+  const year = nowP.year
   const out = []
   const patients = _b.listStore("patients")
   for (let i = 0; i < patients.length; i++) {
@@ -830,7 +933,7 @@ _b.dueBirthdays = function (withinDays) {
     if (p.archived === true) continue
     if (!_b.canMessagePatient(p)) continue
     if (!p.phone) continue
-    const days = _b.daysUntilBirthday(p.birth, now)
+    const days = _b.daysUntilBirthday(p.birth, nowP)
     if (days == null || days > withinDays) continue
     if (p.birthdayMsgYear === year) continue
     out.push({
@@ -844,29 +947,9 @@ _b.dueBirthdays = function (withinDays) {
 }
 
 _b.dueReviews = function () {
-  if (_b.isQuietHours()) return []
-  const out = []
-  const patients = _b.listStore("patients")
-  const apts = _b.listStore("appointments")
-  const doneByPatient = {}
-  for (let i = 0; i < apts.length; i++) {
-    const a = apts[i]
-    if (a.archived === true || a.isDone !== true || !a.patientID) continue
-    doneByPatient[a.patientID] = true
-  }
-  const nowMin = Math.round(Date.now() / 60000)
-  for (let i = 0; i < patients.length; i++) {
-    const p = patients[i]
-    if (p.archived === true || p.reviewDone === true || !p.phone) continue
-    if (!_b.canMessagePatient(p)) continue
-    if (!doneByPatient[p.id]) continue
-    const count = p.reviewAskCount || 0
-    if (count >= 3) continue
-    const last = p.reviewAskLast || 0
-    if (last && nowMin - last < 2 * 24 * 60) continue
-    out.push({ id: p.id, name: p.title || "", phone: p.phone, reviewAskCount: count })
-  }
-  return out
+  // Reviews are sent only from ChatDENT patient details (Send review request).
+  // n8n no longer auto-queues from appointment "done".
+  return []
 }
 
 module.exports = _b

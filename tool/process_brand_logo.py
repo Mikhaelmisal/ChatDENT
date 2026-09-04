@@ -1,63 +1,51 @@
-"""Crop ChatDENT logos to square assets with correct padding for each layout."""
+"""Keep one ChatDENT mark: the in-app sidebar logo, copied to every icon slot."""
+from collections import deque
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC_DARK = ROOT / "assets/brand/logo-dark.png"
-SRC_LIGHT = ROOT / "assets/brand/logo-light.png"
+# Canonical mark — never regenerate this from brand/logo-light or logo-dark.
+SRC = ROOT / "assets/images/logo.png"
+_CHROME = (245, 243, 238, 255)
 
 
-def bbox_non_bg(im: Image.Image, is_dark: bool, thresh: int = 18) -> tuple[int, int, int, int]:
-    px = im.convert("RGBA")
-    w, h = px.size
-    data = px.getdata()
-    min_x, min_y, max_x, max_y = w, h, 0, 0
-    for y in range(h):
-        row = y * w
-        for x in range(w):
-            r, g, b, a = data[row + x]
-            if a < 8:
-                continue
-            if is_dark:
-                if r + g + b < thresh * 3:
-                    continue
-            else:
-                if r > 240 and g > 240 and b > 240:
-                    continue
-            min_x = min(min_x, x)
-            min_y = min(min_y, y)
-            max_x = max(max_x, x)
-            max_y = max(max_y, y)
-    if max_x <= min_x:
-        return (0, 0, w, h)
-    return (min_x, min_y, max_x + 1, max_y + 1)
-
-
-def square_pad(im: Image.Image, pad_ratio: float, bg) -> Image.Image:
-    w, h = im.size
-    side = int(max(w, h) * (1 + pad_ratio * 2))
-    canvas = Image.new("RGBA", (side, side), bg)
-    canvas.paste(im, ((side - w) // 2, (side - h) // 2), im)
-    return canvas
-
-
-def to_transparent(im: Image.Image, is_dark: bool, thresh: int = 18) -> Image.Image:
+def flood_fill_white_bg(im: Image.Image, thresh: int = 242) -> Image.Image:
+    """Knock out the square backdrop from the edges; keep the white speech bubble."""
     im = im.convert("RGBA")
-    data = list(im.getdata())
-    out = []
-    for r, g, b, a in data:
-        if is_dark:
-            if r + g + b < thresh * 3:
-                out.append((r, g, b, 0))
-                continue
-        else:
-            if r > 240 and g > 240 and b > 240:
-                out.append((r, g, b, 0))
-                continue
-        out.append((r, g, b, a))
-    im.putdata(out)
+    w, h = im.size
+    px = im.load()
+    visited = [[False] * w for _ in range(h)]
+    q: deque[tuple[int, int]] = deque()
+    for x in range(w):
+        q.append((x, 0))
+        q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y))
+        q.append((w - 1, y))
+    while q:
+        x, y = q.popleft()
+        if x < 0 or y < 0 or x >= w or y >= h or visited[y][x]:
+            continue
+        visited[y][x] = True
+        r, g, b, a = px[x, y]
+        if a < 8 or r < thresh or g < thresh or b < thresh:
+            continue
+        px[x, y] = (r, g, b, 0)
+        q.append((x - 1, y))
+        q.append((x + 1, y))
+        q.append((x, y - 1))
+        q.append((x, y + 1))
     return im
+
+
+def corners_are_opaque_white(im: Image.Image) -> bool:
+    w, h = im.size
+    for xy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        r, g, b, a = im.getpixel(xy)
+        if a < 250 or r < 242 or g < 242 or b < 242:
+            return False
+    return True
 
 
 def resize(im: Image.Image, size: int) -> Image.Image:
@@ -70,40 +58,37 @@ def save_png(im: Image.Image, path: Path) -> None:
     print("wrote", path)
 
 
+def flatten_on_chrome(im: Image.Image, size: int) -> Image.Image:
+    tooth = resize(im.convert("RGBA"), size)
+    canvas = Image.new("RGBA", (size, size), _CHROME)
+    canvas.alpha_composite(tooth)
+    return canvas.convert("RGB")
+
+
 def main() -> None:
-    dark = Image.open(SRC_DARK).convert("RGBA")
-    light = Image.open(SRC_LIGHT).convert("RGBA")
+    mark = Image.open(SRC).convert("RGBA")
+    if corners_are_opaque_white(mark):
+        mark = flood_fill_white_bg(mark)
+        save_png(mark, SRC)
+    else:
+        print("kept", SRC)
 
-    dark_crop = dark.crop(bbox_non_bg(dark, True))
-    light_crop = light.crop(bbox_non_bg(light, False))
+    # Same pixels everywhere — only the canvas size changes.
+    save_png(resize(mark, 1024), ROOT / "assets/app_icon.png")
+    save_png(resize(mark, 512), ROOT / "assets/app_icon_desktop.png")
+    save_png(resize(mark, 1024), ROOT / "assets/app_icon_foreground.png")
+    save_png(flatten_on_chrome(mark, 1024), ROOT / "assets/app_icon_android.png")
+    save_png(flatten_on_chrome(mark, 1024), ROOT / "assets/app_icon_ios.png")
+    save_png(resize(mark, 256), ROOT / "docs/logo.png")
 
-    tooth_dark = to_transparent(dark_crop, True)
-    tooth_light = to_transparent(light_crop, False)
+    save_png(flatten_on_chrome(mark, 48), ROOT / "web/favicon.png")
+    save_png(flatten_on_chrome(mark, 192), ROOT / "web/icons/Icon-192.png")
+    save_png(flatten_on_chrome(mark, 512), ROOT / "web/icons/Icon-512.png")
+    save_png(flatten_on_chrome(mark, 192), ROOT / "web/icons/Icon-maskable-192.png")
+    save_png(flatten_on_chrome(mark, 512), ROOT / "web/icons/Icon-maskable-512.png")
 
-    # In-app sidebar: light mark, extra horizontal room so it sits beside "ChatDENT"
-    in_app = square_pad(tooth_light, 0.08, (0, 0, 0, 0))
-    save_png(resize(in_app, 256), ROOT / "assets/images/logo.png")
-
-    # App / MSIX / launcher: dark mark on black square (Windows taskbar)
-    icon_dark = square_pad(tooth_dark, 0.14, (0, 0, 0, 255))
-    icon_1024 = resize(icon_dark, 1024)
-    save_png(icon_1024, ROOT / "assets/app_icon.png")
-    save_png(resize(icon_dark, 512), ROOT / "assets/app_icon_desktop.png")
-
-    # Adaptive / iOS / Android: light mark on white
-    fg = square_pad(tooth_light, 0.22, (0, 0, 0, 0))
-    save_png(resize(fg, 1024), ROOT / "assets/app_icon_foreground.png")
-    android = square_pad(tooth_light, 0.16, (255, 255, 255, 255))
-    save_png(resize(android, 1024), ROOT / "assets/app_icon_android.png")
-    ios = square_pad(tooth_light, 0.16, (255, 255, 255, 255))
-    save_png(resize(ios, 1024), ROOT / "assets/app_icon_ios.png")
-
-    docs = ROOT / "docs/logo.png"
-    save_png(resize(in_app, 256), docs)
-
-    ico = resize(icon_dark, 256).convert("RGBA")
     ico_path = ROOT / "windows/runner/resources/app_icon.ico"
-    ico.save(
+    resize(mark, 256).save(
         ico_path,
         sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
     )

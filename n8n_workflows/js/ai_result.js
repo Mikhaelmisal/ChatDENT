@@ -16,20 +16,38 @@ if (parsed.markInterested) events.push({ type: 'interested' });
 if (parsed.reschedule) events.push({ type: 'reschedule' });
 if (parsed.reviewDone) events.push({ type: 'review_done' });
 
+const inboundText = String(inbound.text || '').trim();
+const inboundLower = inboundText.toLowerCase();
+
 // Deterministic: patient replies DONE / reviewed after our review request.
-const inboundText = String(inbound.text || '').toLowerCase().trim();
 const reviewDonePhrase =
   /^(done|reviewed|review done|yes done|i (left|gave|posted|submitted) (a )?review|left a review|gave review)\b/.test(
-    inboundText
+    inboundLower
   ) ||
-  inboundText === 'done' ||
-  inboundText.includes('left a review') ||
-  inboundText.includes('gave a review') ||
-  inboundText.includes('posted a review');
+  inboundLower === 'done' ||
+  inboundLower.includes('left a review') ||
+  inboundLower.includes('gave a review') ||
+  inboundLower.includes('posted a review');
 if (reviewDonePhrase && !events.some(function (e) { return e && e.type === 'review_done'; })) {
   events.push({ type: 'review_done' });
   if (!parsed.reply || !String(parsed.reply).trim()) {
-    parsed.reply = 'Thank you so much for leaving a review — it means a lot to our team! 🙏';
+    parsed.reply = 'Thank you so much for leaving a review — it means a lot to our team!';
+  }
+}
+
+// If AI flagged reschedule but forgot note, keep a useful preference when the message isn't only "please reschedule".
+const rescheduleEv = events.find(function (e) { return e && e.type === 'reschedule'; });
+if (rescheduleEv) {
+  const note = String(rescheduleEv.note || rescheduleEv.preferredTime || '').trim();
+  if (!note && inboundText) {
+    const onlyAsk =
+      /^(hi|hello|hey)?[\s,]*(i (want to |would like to |need to )?)?(please )?reschedule( (my )?appointment)?[.!?]*$/i.test(
+        inboundText
+      ) ||
+      /^(can (we|i) |please )?(change|move) (my )?(appointment|time|slot)[.!?]*$/i.test(inboundText);
+    if (!onlyAsk) {
+      rescheduleEv.note = inboundText.slice(0, 400);
+    }
   }
 }
 

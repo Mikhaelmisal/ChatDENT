@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/localization/locale.dart';
@@ -41,15 +42,12 @@ class DateTimePickerState extends State<DateTimePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final color = FluentTheme.of(context).menuColor;
+    final p = ChatDentPalette.of(context);
     return GestureDetector(
       onTap: pick,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 5),
-        decoration: BoxDecoration(
-            color: widget.enabled ? color : color.toAccentColor().dark,
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
-            borderRadius: BorderRadius.circular(5)),
+        decoration: chatDentInnerCard(p),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -58,7 +56,11 @@ class DateTimePickerState extends State<DateTimePicker> {
                 child: Center(
                     child: Txt(
                   widget.pickTime ? DF.time(value) : DF.commonDate(value),
-                  style: widget.textStyle,
+                  style: widget.textStyle ??
+                      TextStyle(
+                        fontFamily: ChatDentFonts.ui,
+                        color: p.stone,
+                      ),
                 ))),
             if (widget.showButton && widget.enabled)
               IconButton(

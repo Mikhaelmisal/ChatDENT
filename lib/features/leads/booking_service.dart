@@ -1,3 +1,4 @@
+import 'package:chatdent/features/accounts/accounts_controller.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/leads/clinic_hours.dart';
@@ -35,6 +36,20 @@ class BookSlotResult {
   });
 }
 
+class DoctorBoard {
+  final String operatorId;
+  final String name;
+  final List<Appointment> today;
+  final List<FreeSlot> free;
+
+  const DoctorBoard({
+    required this.operatorId,
+    required this.name,
+    required this.today,
+    required this.free,
+  });
+}
+
 class BookingService {
   ClinicHours get hours =>
       ClinicHours.fromJsonString(globalSettings.get(ClinicHours.settingId).value);
@@ -60,11 +75,90 @@ class BookingService {
     return engine.getFreeSlots(
       from: DateTime.now(),
       days: days,
-      durationMinutes: durationMinutes,
+      durationMinutes: durationMinutes ?? hours.slotMinutes,
       operatorId: operatorId,
       limit: limit,
       busy: occupied(),
     );
+  }
+
+  List<String> bookingOperatorIds() {
+    final ops = accounts.operators.map((a) => a.id).toList();
+    if (ops.isNotEmpty) return ops;
+    if (hours.defaultOperatorId.isNotEmpty) return [hours.defaultOperatorId];
+    if (login.currentAccountID.isNotEmpty) return [login.currentAccountID];
+    return [''];
+  }
+
+  List<int> freeSlotStarts({
+    required DateTime day,
+    required String operatorId,
+    DateTime? now,
+  }) {
+    final duration = hours.slotMinutes;
+    final clock = now ?? DateTime.now();
+    final busy = occupied();
+    final starts = <int>[];
+    for (final m in hours.slotStartsForLocalDate(day)) {
+      final start = DateTime(day.year, day.month, day.day, m ~/ 60, m % 60);
+      if (!start.isAfter(clock)) continue;
+      final end = start.add(Duration(minutes: duration));
+      if (engine.isFree(
+        start: start,
+        end: end,
+        operatorId: operatorId,
+        busy: busy,
+      )) {
+        starts.add(m);
+      }
+    }
+    return starts;
+  }
+
+  List<Appointment> bookedOn({
+    required String operatorId,
+    required DateTime day,
+  }) {
+    return appointments.present.values
+        .where((a) =>
+            a.archived != true &&
+            (operatorId.isEmpty || a.operatorsIDs.contains(operatorId)) &&
+            _isSameLocalDay(a.date, day))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+  }
+
+  bool _isSameLocalDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
+  List<DoctorBoard> doctorBoards({int freeLimit = 8}) {
+    final now = DateTime.now();
+    final busy = occupied();
+    return [
+      for (final id in bookingOperatorIds())
+        DoctorBoard(
+          operatorId: id,
+          name: id.isEmpty ? '' : accounts.nameOrEmailFromID(id),
+          today: appointments.present.values
+              .where((a) =>
+                  a.archived != true &&
+                  a.operatorsIDs.contains(id) &&
+                  _isSameLocalDay(a.date, now))
+              .toList()
+            ..sort((a, b) => a.date.compareTo(b.date)),
+          free: engine.getFreeSlots(
+            from: now,
+            days: 7,
+            durationMinutes: hours.slotMinutes,
+            operatorId: id.isEmpty ? null : id,
+            limit: freeLimit,
+            busy: busy,
+          ),
+        ),
+    ];
   }
 
   Patient ensurePatient(Lead lead) {
@@ -108,15 +202,6 @@ class BookingService {
         : (slot.operatorId.isNotEmpty
             ? slot.operatorId
             : hours.defaultOperatorId);
-    final end = slot.start.add(Duration(minutes: duration));
-    if (!engine.isFree(
-      start: slot.start,
-      end: end,
-      operatorId: op,
-      busy: occupied(),
-    )) {
-      throw BookSlotException('slotTaken');
-    }
 
     final patient = ensurePatient(lead);
     if (patient.intakeSource != PatientIntakeSource.phoneCall) {
@@ -132,15 +217,16 @@ class BookingService {
       'date': (slot.start.millisecondsSinceEpoch / 60000).round(),
       'duration': duration,
       'operatorsIDs': operatorIds,
-      'preOpNotes': lead.interest.isNotEmpty
-          ? lead.interest
-          : 'Booked from lead',
+      if (lead.interest.trim().isNotEmpty) 'preOpNotes': lead.interest.trim(),
     });
     appointments.set(appointment);
 
     lead.patientID = patient.id;
     lead.appointmentID = appointment.id;
     lead.stage = LeadStage.scheduled;
+    lead.called = true;
+    lead.coming = true;
+    lead.callOutcome = CallOutcome.booked;
     lead.lastContactedAt = DateTime.now();
     leads.set(lead);
 

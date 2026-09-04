@@ -6,7 +6,7 @@ import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/leads/lead_model.dart';
 import 'package:chatdent/features/leads/leads_store.dart';
 import 'package:chatdent/features/leads/open_lead_panel.dart';
-import 'package:chatdent/features/outreach/campaign_settings.dart';
+import 'package:chatdent/features/outreach/birthday_calendar.dart';
 import 'package:chatdent/features/patients/open_patient_panel.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/services/localization/locale.dart';
@@ -47,6 +47,7 @@ class _OutreachPageState extends State<_OutreachPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: CommandBar(
+              overflowBehavior: CommandBarOverflowBehavior.wrap,
               primaryItems: [
                 CommandBarButton(
                   onPressed: () => setState(() => tab = 0),
@@ -96,34 +97,7 @@ class _BirthdaysTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final rows = patients.present.values.where((p) {
-      if (!p.hasFullBirthDate || p.phonesString.isEmpty) return false;
-      final days = daysUntilBirthday(p.birthAsDate, now);
-      return days != null && days <= 14 && p.birthdayMsgYear != now.year;
-    }).toList()
-      ..sort((a, b) => (daysUntilBirthday(a.birthAsDate, now) ?? 99)
-          .compareTo(daysUntilBirthday(b.birthAsDate, now) ?? 99));
-
-    if (rows.isEmpty) return const NoItemsFound();
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: rows.length,
-      itemBuilder: (context, i) {
-        final p = rows[i];
-        final days = daysUntilBirthday(p.birthAsDate, now) ?? 0;
-        return ListTile(
-          leading: ItemTitle(item: p),
-          title: Text(p.title),
-          subtitle: Text(
-              days == 0 ? txt('birthdayToday') : '${txt('daysAway')}: $days'),
-          trailing: p.phone.isEmpty
-              ? null
-              : PhoneNumberButton(phoneNumbers: p.phone),
-          onPressed: () => openPatient(p),
-        );
-      },
-    );
+    return const BirthdayAgendaCalendar();
   }
 }
 
@@ -133,9 +107,10 @@ class _ReviewsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = patients.present.values.where((p) {
+      if (!p.treatmentCompleted) return false;
       if (p.reviewDone || p.phonesString.isEmpty) return false;
-      if (p.reviewAskCount >= 3) return false;
-      return p.doneAppointments.isNotEmpty;
+      if (p.reviewAskCount >= 1) return false;
+      return true;
     }).toList();
     if (rows.isEmpty) return const NoItemsFound();
     return ListView.builder(
@@ -146,7 +121,7 @@ class _ReviewsTab extends StatelessWidget {
         return ListTile(
           leading: ItemTitle(item: p),
           title: Text(p.title),
-          subtitle: Text('${txt('reviewAsked')}: ${p.reviewAskCount}/3'),
+          subtitle: Text(txt('sendReviewFromPatient')),
           trailing: Button(
             onPressed: () {
               p.reviewDone = true;

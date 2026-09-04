@@ -1,6 +1,7 @@
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/expenses/expenses_store.dart';
+import 'package:chatdent/features/invoices/invoices_store.dart';
 import 'package:chatdent/features/leads/leads_store.dart';
 import 'package:chatdent/features/notes/notes_store.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
@@ -27,6 +28,7 @@ initializeStores() {
   });
 
   expenses.init();
+  invoices.init();
   notes.init();
   leads.init();
 }

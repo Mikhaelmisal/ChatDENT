@@ -221,6 +221,19 @@ class Patient extends Model {
     return pricesGiven - paymentsMade;
   }
 
+  /// Extra paid on other visits. Applied to the next treatment’s amount due.
+  double creditBalance({String? excludingAppointmentId}) {
+    double paid = 0;
+    double prices = 0;
+    for (final a in allAppointments) {
+      if (a.id == excludingAppointmentId) continue;
+      paid += a.paid;
+      prices += a.price;
+    }
+    final extra = paid - prices;
+    return extra > 0 ? extra : 0;
+  }
+
   int? get daysSinceLastAppointment {
     if (doneAppointments.isEmpty) return null;
     return DateTime.now().difference(doneAppointments.last.date).inDays;
@@ -368,7 +381,7 @@ class Patient extends Model {
       value: 0,
       searchableString: "",
       sortable: false,
-      tab: 4,
+      tab: 5,
       icon: FluentIcons.q_r_code,
     ));
 
@@ -407,6 +420,18 @@ class Patient extends Model {
       content: rxCount == 0 ? txt("none") : rxCount.toString(),
       sortable: true,
       tab: 3,
+    ));
+
+    _.add(PatientTableLabel(
+      icon: FluentIcons.money,
+      title: txt("invoices"),
+      searchableString: txt("invoices"),
+      value: pricesGiven,
+      content: pricesGiven == 0
+          ? txt("none")
+          : "${pricesGiven.toStringAsFixed(2)} ${currency()}",
+      sortable: true,
+      tab: 4,
     ));
 
     final paymentStatus = txt(underPaid
@@ -521,6 +546,8 @@ class Patient extends Model {
   /* 17 */ bool welcomeWhatsAppSent = false;
   /// When true, skip all clinic WhatsApp (reminders, leave pack, etc.).
   /* 18 */ bool whatsappHold = false;
+  /// Full course of care finished — required before a Google review ask.
+  /* 19 */ bool treatmentCompleted = false;
 
   String get phonesString =>
       phone.map((p) => '${p.countryCode}${p.nsn}').join('');
@@ -588,6 +615,8 @@ class Patient extends Model {
     /* 17 */ welcomeWhatsAppSent =
         json["welcomeWhatsAppSent"] ?? welcomeWhatsAppSent;
     /* 18 */ whatsappHold = json["whatsappHold"] ?? whatsappHold;
+    /* 19 */ treatmentCompleted =
+        json["treatmentCompleted"] ?? treatmentCompleted;
   }
 
   @override
@@ -626,6 +655,9 @@ class Patient extends Model {
     }
     /* 18 */ if (whatsappHold != d.whatsappHold) {
       json['whatsappHold'] = whatsappHold;
+    }
+    /* 19 */ if (treatmentCompleted != d.treatmentCompleted) {
+      json['treatmentCompleted'] = treatmentCompleted;
     }
     return json;
   }

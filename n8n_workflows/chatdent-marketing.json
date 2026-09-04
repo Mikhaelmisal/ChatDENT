@@ -57,7 +57,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             }
           ]
         },
@@ -74,7 +74,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json || {};\nconst people = body.people || [];\nif (!people.length) return [];\nconst evo = body.evolution || {};\nreturn people.map(function (p) {\n  return {\n    json: {\n      evoBase: evo.baseUrl || 'http://evolution-api:8080',\n      evoKey: 'clinic_secret_key_123',\n      evoInstance: p.evoInstance || evo.instance || 'clinic_default',\n      number: String(p.phone || '').replace(/\\D/g, ''),\n      reply: p.caption || '',\n      mediaCaption: p.caption || '',\n      flyerUrl: p.imageUrl || '',\n      phone: String(p.phone || '').replace(/\\D/g, ''),\n      name: p.name || '',\n      type: 'marketing_sent',\n      sendMedia: !!p.imageUrl,\n      leadId: p.id || ''\n    }\n  };\n});\n"
+        "jsCode": "function n8nEnv(name, fallback) {\n  try {\n    const v = $env[name];\n    if (v != null && String(v).trim() !== '') return String(v).trim();\n  } catch (e) {}\n  return fallback == null ? '' : fallback;\n}\n\nconst body = $input.first().json || {};\nconst people = body.people || [];\nif (!people.length) return [];\nconst evo = body.evolution || {};\nreturn people.map(function (p) {\n  return {\n    json: {\n      evoBase: n8nEnv('N8N_EVO_BASE', 'http://evolution-api:8080'),\n      evoKey: n8nEnv('EVOLUTION_API_KEY', ''),\n      evoInstance:\n        p.evoInstance ||\n        evo.instance ||\n        n8nEnv('WHATSAPP_SESSION_ID', 'clinic_default'),\n      number: String(p.phone || '').replace(/\\D/g, ''),\n      reply: p.caption || '',\n      mediaCaption: p.caption || '',\n      flyerUrl: p.imageUrl || '',\n      phone: String(p.phone || '').replace(/\\D/g, ''),\n      name: p.name || '',\n      type: 'marketing_sent',\n      sendMedia: !!p.imageUrl,\n      leadId: p.id || ''\n    }\n  };\n});\n"
       },
       "id": "code-split-mkt",
       "name": "Split marketing",
@@ -130,7 +130,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -161,7 +161,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $json.evoKey || 'clinic_secret_key_123' }}"
+              "value": "={{ $json.evoKey || $env.EVOLUTION_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -192,7 +192,7 @@
           "parameters": [
             {
               "name": "X-Booking-Token",
-              "value": "rlwqer5f50usxidldnhdzyg7"
+              "value": "={{ $env.N8N_BOOKING_TOKEN }}"
             },
             {
               "name": "Content-Type",
@@ -202,7 +202,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, name: $json.name, type: $json.type, leadId: $json.leadId }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: $('Wait before blast').item.json.phone, name: $('Wait before blast').item.json.name, type: $('Wait before blast').item.json.type, leadId: $('Wait before blast').item.json.leadId }) }}",
         "options": {}
       },
       "id": "http-mark-mkt",

@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/utils/flyout_focus_fix.dart';
@@ -10,25 +11,25 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = ChatDentPalette.of(context);
     return Positioned(
       bottom: 0,
       height: 66,
       width: MediaQuery.of(context).size.width,
       child: Container(
         decoration: BoxDecoration(
-          color: FluentTheme.of(context).menuColor,
+          color: p.chrome,
           boxShadow: [
             BoxShadow(
-              offset: const Offset(0.0, -2.0), // Cast shadow upwards
+              offset: const Offset(0.0, -2.0),
               blurRadius: 15.0,
               spreadRadius: 1.0,
-              color: Colors.black.withOpacity(0.05), // Slight, elegant shadow
+              color: p.stone.withValues(alpha: 0.05),
             ),
           ],
           border: Border(
             top: BorderSide(
-              color:
-                  FluentTheme.of(context).resources.dividerStrokeColorDefault,
+              color: p.border,
               width: 0.5,
             ),
           ),
@@ -42,7 +43,6 @@ class BottomNavBar extends StatelessWidget {
                 final allRoutes = routes.allRoutes;
                 final int totalRoutes = allRoutes.length;
 
-                // Make it more compact to fit slightly more items
                 const double minItemWidth = 52.0;
                 int maxVisibleItems = (availableWidth / minItemWidth).floor();
 
@@ -52,9 +52,8 @@ class BottomNavBar extends StatelessWidget {
 
                 if (maxVisibleItems < totalRoutes) {
                   showMore = true;
-                  int visibleCount =
-                      maxVisibleItems - 1; // Leave space for 'More'
-                  if (visibleCount < 1) visibleCount = 1; // Sanity check
+                  int visibleCount = maxVisibleItems - 1;
+                  if (visibleCount < 1) visibleCount = 1;
 
                   visibleRoutes = allRoutes.sublist(0, visibleCount);
                   overflowRoutes = allRoutes.sublist(visibleCount);
@@ -76,14 +75,12 @@ class BottomNavBar extends StatelessWidget {
                     if (showMore)
                       Container(
                         width: 1,
-                        height:
-                            24, // Smaller height to look like a clean vertical divider
+                        height: 24,
                         margin: const EdgeInsets.symmetric(
                             horizontal: 4, vertical: 16),
-                        color: FluentTheme.of(context)
-                            .resources
-                            .dividerStrokeColorDefault
-                            .withOpacity(0.1),
+                        color: ChatDentPalette.of(context)
+                            .border
+                            .withValues(alpha: 0.5),
                       ),
                     if (showMore)
                       Expanded(
@@ -117,10 +114,8 @@ class BottomNavBarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    final color = active
-        ? Colors.blue
-        : (theme.typography.body?.color?.withOpacity(0.6) ?? Colors.grey);
+    final p = ChatDentPalette.of(context);
+    final color = active ? p.fluentBlue : p.muted;
 
     return HoverButton(
       onPressed: () => routes.navigate(identifier),
@@ -132,9 +127,9 @@ class BottomNavBarButton extends StatelessWidget {
           curve: Curves.easeOutQuint,
           decoration: BoxDecoration(
             color: active
-                ? Colors.blue.withOpacity(0.08) // Indicative active pill
+                ? p.fluentBlue.withValues(alpha: 0.1)
                 : (isHovered
-                    ? theme.resources.subtleFillColorSecondary
+                    ? p.stone.withValues(alpha: 0.08)
                     : Colors.transparent),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -165,7 +160,6 @@ class BottomNavBarButton extends StatelessWidget {
                       fontSize: 10,
                       fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                       color: color,
-                      fontFamily: theme.typography.body?.fontFamily,
                     ),
                     child: Text(title),
                   ),
@@ -198,14 +192,10 @@ class _BottomNavBarMoreButtonState extends State<BottomNavBarMoreButton> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-
-    // Highlight the "More" button if the currently active route is inside it
+    final p = ChatDentPalette.of(context);
     final isActive = widget.overflowRoutes
         .any((r) => r.identifier == routes.currentRoute.identifier);
-    final color = isActive
-        ? Colors.blue
-        : (theme.typography.body?.color?.withValues(alpha: .6) ?? Colors.grey);
+    final color = isActive ? p.fluentBlue : p.muted;
 
     return FlyoutTarget(
       controller: bottomNavFlyoutController,
@@ -228,12 +218,12 @@ class _BottomNavBarMoreButtonState extends State<BottomNavBarMoreButton> {
                       style: TextStyle(
                         fontWeight:
                             isItemActive ? FontWeight.bold : FontWeight.normal,
-                        color: isItemActive ? Colors.blue : null,
+                        color: isItemActive ? p.fluentBlue : null,
                       ),
                     ),
                     leading: Icon(
                       r.icon,
-                      color: isItemActive ? Colors.blue : null,
+                      color: isItemActive ? p.fluentBlue : null,
                     ),
                     onPressed: () {
                       routes.navigate(r.identifier);
@@ -253,9 +243,9 @@ class _BottomNavBarMoreButtonState extends State<BottomNavBarMoreButton> {
             curve: Curves.easeOutQuint,
             decoration: BoxDecoration(
               color: isActive
-                  ? Colors.blue.withOpacity(0.08)
+                  ? p.fluentBlue.withValues(alpha: 0.1)
                   : (isHovered
-                      ? theme.resources.subtleFillColorSecondary
+                      ? p.stone.withValues(alpha: 0.08)
                       : Colors.transparent),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -287,7 +277,6 @@ class _BottomNavBarMoreButtonState extends State<BottomNavBarMoreButton> {
                         fontWeight:
                             isActive ? FontWeight.w600 : FontWeight.w500,
                         color: color,
-                        fontFamily: theme.typography.body?.fontFamily,
                       ),
                       child: Text(txt("more")),
                     ),

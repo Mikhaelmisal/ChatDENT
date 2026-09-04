@@ -9,32 +9,34 @@
 	<meta name="description" content="Dental clinic management system" />
 
 	<!--
-		COOP/COEP — fallback for cross-origin isolation (dicom_toolkit WASM
-		threading / SharedArrayBuffer). The PRIMARY mechanism is web/_headers
-		served by Cloudflare Pages, because browsers do not honor <meta>
-		tags for worker-spawned contexts. These meta tags cover top-level
-		document isolation only.
+		Do not set COOP/COEP on the login/clinic web app. require-corp blocks
+		PocketBase and Firebase on another origin (Tailscale / LAN), so Chrome
+		login fails. Cloudflare Pages still sends these via web/_headers when
+		DICOM WASM isolation is needed on a hosted deploy.
 	-->
-	<meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
-	<meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
-
 
 	<!-- iOS meta tags & icons -->
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 	<meta name="apple-mobile-web-app-title" content="ChatDENT" />
-	<link rel="apple-touch-icon" href="icons/Icon-192.png" />
+	<link rel="apple-touch-icon" href="icons/Icon-192.png?v=0103c" />
 
 	<!-- Favicon -->
-	<link rel="icon" type="image/png" href="favicon.png" />
+	<link rel="icon" type="image/png" sizes="48x48" href="favicon.png?v=0103c" />
+	<link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png?v=0103c" />
 
 	<title>ChatDENT</title>
 	<link rel="manifest" href="manifest.json" />
 	<style>
+		html, body {
+			margin: 0;
+			background: #F5F3EE;
+		}
+
 		#progress {
 			width: 92px;
 			height: 122px;
-			background-image: url(./icons/Icon-192.png);
+			background-image: url(./icons/Icon-192.png?v=0103c);
 			background-size: contain;
 			background-repeat: no-repeat;
 			background-position: center;
@@ -45,7 +47,7 @@
 			text-transform: uppercase;
 			text-align: center;
 			font-family: monospace;
-			color: #e3e3e3;
+			color: #78716C;
 		}
 
 		@keyframes pulse {

@@ -10,6 +10,7 @@ import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/features/prescriptions/prescription_line.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/login.dart';
+import 'package:chatdent/utils/clinic_service_url.dart';
 import 'package:chatdent/utils/india_phone.dart';
 import 'package:chatdent/utils/logger.dart';
 import 'package:http/http.dart' as http;
@@ -86,7 +87,10 @@ class ClinicWhatsApp {
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (body.isEmpty || digits.length < 10) return;
     final evo = _evo;
-    final base = evo.baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final base = resolveClinicServiceUrl(
+      evo.baseUrl.trim().replaceAll(RegExp(r'/+$'), ''),
+      login.url,
+    );
     final key = evo.apiKey.trim();
     final instance =
         evo.instance.trim().isEmpty ? 'clinic_default' : evo.instance.trim();
@@ -130,7 +134,10 @@ class ClinicWhatsApp {
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (digits.length < 10) return;
     final evo = _evo;
-    final base = evo.baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final base = resolveClinicServiceUrl(
+      evo.baseUrl.trim().replaceAll(RegExp(r'/+$'), ''),
+      login.url,
+    );
     final key = evo.apiKey.trim();
     final instance =
         evo.instance.trim().isEmpty ? 'clinic_default' : evo.instance.trim();
@@ -400,5 +407,38 @@ class ClinicWhatsApp {
       }
       await sendBriefNextAppointment(a.id);
     }
+  }
+
+  /// Manual Google review request from patient details (once).
+  /// Returns false if skipped (hold, no phone, already asked, treatment not done).
+  static Future<bool> sendReviewRequest(Patient patient) async {
+    if (mustNotMessage(patient)) return false;
+    if (!patient.treatmentCompleted) return false;
+    if (patient.reviewDone || patient.reviewAskCount >= 1) return false;
+    final number = _digitsFor(patient);
+    if (number == null) return false;
+    final campaign = WhatsAppCampaign.fromJsonString(
+      globalSettings.campaignJson,
+    );
+    final reviewUrl = campaign.googleReviewUrl.trim();
+    var text = filledWhatsAppNote(
+      WhatsAppTemplateIds.review,
+      name: patient.title,
+      reviewUrl: reviewUrl,
+    );
+    if (text.isEmpty) {
+      text = fillWhatsAppTemplate(
+        campaign.reviewTemplate,
+        name: patient.title,
+        reviewUrl: reviewUrl,
+      );
+    }
+    if (text.trim().isEmpty) return false;
+    await sendText(number: number, text: text);
+    patient.reviewAskCount = (patient.reviewAskCount) + 1;
+    patient.reviewAskLast =
+        (DateTime.now().millisecondsSinceEpoch / 60000).round();
+    patients.set(patient);
+    return true;
   }
 }

@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/utils/flyout_focus_fix.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -218,12 +219,7 @@ class _TagInputWidgetState extends State<TagInputWidget> {
           child: Container(
             height: widget.multiline ? visibleTags.length * 40 + 40 : 40,
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-            decoration: BoxDecoration(
-              color: FluentTheme.of(context).cardColor,
-              border: Border.all(
-                  color: FluentTheme.of(context).inactiveColor.withAlpha(30)),
-              borderRadius: BorderRadius.circular(5),
-            ),
+            decoration: chatDentInnerCard(ChatDentPalette.of(context)),
             child: widget.multiline
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,13 +390,14 @@ class _TagInputWidgetState extends State<TagInputWidget> {
   }
 
   Widget _buildTag(TagInputItem tag) {
+    final p = ChatDentPalette.of(context);
     return Container(
       height: widget.multiline ? 36 : null,
       padding: const EdgeInsets.only(right: 2, bottom: 2),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.withAlpha(100)),
+        border: Border.all(color: tapable ? p.fluentBlue : p.border),
         borderRadius: BorderRadius.circular(5),
-        color: tapable ? Colors.blue : FluentTheme.of(context).cardColor,
+        color: tapable ? p.fluentBlue : p.card,
       ),
       child: IconButton(
         onPressed: () {

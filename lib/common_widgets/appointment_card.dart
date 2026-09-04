@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/common_widgets/delete_button.dart';
 import 'package:chatdent/common_widgets/error_dialog.dart';
@@ -113,23 +114,9 @@ class AppointmentCard extends StatelessWidget {
               if (readOnly == false) const SizedBox(width: 4),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.all(Radius.circular(5)),
-                      color: FluentTheme.of(context).micaBackgroundColor,
-                      boxShadow: const [
-                        BoxShadow(
-                          offset: Offset(0.0, 8.0),
-                          blurRadius: 17.0,
-                          spreadRadius: 2.0,
-                          color: Color.fromARGB(14, 0, 0, 0),
-                        ),
-                        BoxShadow(
-                          offset: Offset(0.0, 5.0),
-                          blurRadius: 22.0,
-                          spreadRadius: 4.0,
-                          color: Color(0x1F000000),
-                        ),
-                      ]),
+                  decoration: chatDentInnerCard(ChatDentPalette.of(context)).copyWith(
+                    boxShadow: chatDentPopupShadow(ChatDentPalette.of(context)),
+                  ),
                   child: Container(
                     decoration:
                         showLeftBorder ? _coloredHandleDecoration(color) : null,
@@ -301,7 +288,7 @@ class AppointmentCard extends StatelessWidget {
                           _buildSection(
                               txt("labwork"),
                               Txt(
-                                "${appointment.labworkNotes}\n${appointment.labworkReceived ? ("➡️ ${txt("received")}") : ("⚠️ ${txt("due")}")}",
+                                "${appointment.labworkNotes}\n${appointment.labworkReceived ? (appointment.isLaboworkUndelivered ? ("📌 ${txt("undelivered")}") : ("✅ ${txt("receivedAndDelivered")}")) : ("⚠️ ${txt("due")}")}",
                                 style: const TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.w500),
                               ),
@@ -398,10 +385,10 @@ class AppointmentCard extends StatelessWidget {
       spacing: 5,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Row(
+        Wrap(
           spacing: 5,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisAlignment: MainAxisAlignment.end,
+          runSpacing: 5,
+          alignment: WrapAlignment.end,
           children: [
             PaymentPill(
               title: txt("price"),
@@ -467,9 +454,9 @@ class AppointmentCard extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, Color color) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        Expanded(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (number > 0 &&
@@ -486,6 +473,7 @@ class AppointmentCard extends StatelessWidget {
             _buildFormattedDate(color),
           ],
         ),
+        ),
         if (!hide.contains(AppointmentSections.openAppointmentButton)) ...[
           IconButton(
             icon: const Icon(FluentIcons.go, size: 17, color: Colors.white),
@@ -501,6 +489,8 @@ class AppointmentCard extends StatelessWidget {
   Text _buildFormattedDate(Color color) {
     return Txt(
       DF.full(appointment.date),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: showLeftBorder ? color : null,
         fontSize: 13,

@@ -130,7 +130,7 @@ class SlotEngine {
             localDay.year, localDay.month, localDay.day, cursor);
         final end = start.add(Duration(minutes: duration));
         if (!start.isAfter(clock)) {
-          cursor += hours.slotMinutes;
+          cursor += duration;
           continue;
         }
         if (isFree(start: start, end: end, operatorId: op, busy: busy)) {
@@ -141,7 +141,7 @@ class SlotEngine {
             operatorId: op,
           ));
         }
-        cursor += hours.slotMinutes;
+        cursor += duration;
       }
     }
     return slots;

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/common_widgets/appointment_card.dart';
 import 'package:chatdent/common_widgets/audio_recorder.dart';
@@ -28,12 +29,13 @@ import 'package:chatdent/features/patients/open_patient_panel.dart';
 import 'package:chatdent/utils/money_editing_controller.dart';
 import 'package:chatdent/utils/money_input_formatter.dart';
 import 'package:chatdent/utils/print/print_prescription.dart';
+import 'package:chatdent/common_widgets/clinic_slot_time_picker.dart';
 import 'package:chatdent/common_widgets/date_time_picker.dart';
 import 'package:chatdent/common_widgets/duration_pill.dart';
+import 'package:chatdent/features/leads/clinic_hours.dart';
 import 'package:chatdent/common_widgets/grid_gallery.dart';
 import 'package:chatdent/common_widgets/operators_picker.dart';
 import 'package:chatdent/common_widgets/patient_picker.dart';
-import 'package:chatdent/common_widgets/tag_input.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
@@ -76,6 +78,12 @@ void openAppointment([Appointment? appointment, int? selectedTabIndex]) {
   final previous = appointments.get(editingCopy.id) == null
       ? null
       : Appointment.fromJson(appointment!.toJson());
+  if (previous == null) {
+    final hours = ClinicHours.fromJsonString(
+        globalSettings.get(ClinicHours.settingId).value);
+    editingCopy.duration = hours.slotMinutes;
+    editingCopy.date = hours.snapToSlot(editingCopy.date);
+  }
   late final Panel<Appointment> panel;
   panel = Panel<Appointment>(
     singularName: "appointment",
@@ -452,8 +460,6 @@ class _AppointmentDetailsState extends State<_AppointmentDetails> {
           key: Key(widget.appointment.patientID ?? ""),
           label: "${txt("patient")}:",
           child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: PatientPicker(
@@ -502,13 +508,16 @@ class _AppointmentDetailsState extends State<_AppointmentDetails> {
             key: WK.fieldAppointmentDate,
             initValue: widget.appointment.date,
             onChange: (d) {
-              widget.appointment.date = DateTime(
+              final hours = ClinicHours.fromJsonString(
+                  globalSettings.get(ClinicHours.settingId).value);
+              widget.appointment.date = hours.snapToSlot(DateTime(
                 d.year,
                 d.month,
                 d.day,
                 widget.appointment.date.hour,
                 widget.appointment.date.minute,
-              );
+              ));
+              setState(() {});
             },
             buttonText: txt("changeDate"),
             buttonIcon: WindowsIcons.calendar,
@@ -516,28 +525,25 @@ class _AppointmentDetailsState extends State<_AppointmentDetails> {
         ),
         InfoLabel(
           label: "${txt("time")}:",
-          child: DateTimePicker(
-            key: WK.fieldAppointmentTime,
-            initValue: widget.appointment.date,
-            onChange: (d) => {
+          child: ClinicSlotTimePicker(
+            hourKey: WK.fieldAppointmentTime,
+            value: widget.appointment.date,
+            onChange: (d) => setState(() {
               widget.appointment.date = DateTime(
                 widget.appointment.date.year,
                 widget.appointment.date.month,
                 widget.appointment.date.day,
                 d.hour,
                 d.minute,
-              )
-            },
-            buttonText: txt("changeTime"),
-            pickTime: true,
-            buttonIcon: FluentIcons.clock,
+              );
+            }),
           ),
         ),
         InfoLabel(
           label: "${txt("duration")}:",
           child: DurationPill(
             item: widget.appointment,
-            color: Colors.blue,
+            color: ChatDentPalette.of(context).fluentBlue,
             onSet: (d) => widget.appointment.duration = d,
             isCompact: false,
           ),
@@ -627,6 +633,7 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
           paymentsMade -
           widget.appointment.paid;
     }
+    final fieldFill = chatDentFieldFill(ChatDentPalette.of(context));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -634,12 +641,7 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
           InfoLabel(
             label: "${txt("dentalNotes")}:",
             child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: FluentTheme.of(context).shadowColor.withAlpha(50)),
-                color: FluentTheme.of(context).menuColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: chatDentInnerCard(ChatDentPalette.of(context)),
               padding: const EdgeInsets.all(8),
               child: Column(
                 spacing: 10,
@@ -710,6 +712,21 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
           ],
         ),
         const Divider(direction: Axis.horizontal),
+        if ((widget.appointment.patient?.creditBalance(
+                    excludingAppointmentId: widget.appointment.id) ??
+                0) >
+            0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InfoBar(
+              isLong: true,
+              title: Txt(
+                '${txt("creditBalance")}: ${(widget.appointment.patient!.creditBalance(excludingAppointmentId: widget.appointment.id)).toStringAsFixed(2)} ${currency()}',
+              ),
+              content: Txt(txt("creditAppliedNextHint")),
+              severity: InfoBarSeverity.success,
+            ),
+          ),
         Row(
           children: [
             Expanded(
@@ -718,11 +735,18 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
                 child: CupertinoTextField(
                   key: WK.fieldAppointmentPrice,
                   controller: priceController,
+                  decoration: fieldFill,
                   onChanged: (v) {
                     setState(() {
                       widget.appointment.price = moneyInputFormatter.parse(v);
                       if (didNotEditPaidYet) {
-                        widget.appointment.paid = widget.appointment.price;
+                        final credit = widget.appointment.patient
+                                ?.creditBalance(
+                                    excludingAppointmentId:
+                                        widget.appointment.id) ??
+                            0;
+                        final due = widget.appointment.price - credit;
+                        widget.appointment.paid = due > 0 ? due : 0;
                         paidController.text = moneyInputFormatter
                             .formatDouble(widget.appointment.paid);
                       }
@@ -743,6 +767,7 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
                 child: CupertinoTextField(
                   key: WK.fieldAppointmentPayment,
                   controller: paidController,
+                  decoration: fieldFill,
                   onChanged: (v) {
                     setState(() {
                       didNotEditPaidYet = false;
@@ -867,6 +892,7 @@ class _PrescriptionDetailsState extends State<_PrescriptionDetails> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InfoBar(
+          isLong: true,
           title: Txt(txt('prescriptionsTabInfo')),
           action: Button(
             onPressed: () {
@@ -1172,13 +1198,8 @@ class _LabWorkEditorState extends State<LabWorkEditor> {
 
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: color, width: 4),
-          bottom: BorderSide(color: color),
-          left: BorderSide(color: color),
-          right: BorderSide(color: color),
-        ),
+      decoration: chatDentInnerCard(ChatDentPalette.of(context)).copyWith(
+        border: Border.all(color: color),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1276,7 +1297,7 @@ class _LabWorkEditorState extends State<LabWorkEditor> {
             checked: widget.appointment.labworkReceived,
             onChanged: (v) =>
                 setState(() => widget.appointment.labworkReceived = v ?? false),
-            content: Txt(txt("received")),
+            content: Txt(txt("deliveredToPatient")),
           ),
         ],
       ),

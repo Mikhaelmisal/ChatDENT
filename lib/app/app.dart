@@ -1,9 +1,9 @@
 import 'dart:io';
 
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/app/navbar_widget.dart';
 import 'package:chatdent/app/panel_widget.dart';
 import 'package:chatdent/app/routes.dart';
-import 'package:chatdent/common_widgets/back_button.dart';
 import 'package:chatdent/common_widgets/dialogs/changelog_dialog.dart';
 import 'package:chatdent/common_widgets/dialogs/first_launch_dialog.dart';
 import 'package:chatdent/common_widgets/dialogs/new_version_dialog.dart';
@@ -56,17 +56,17 @@ class ChatDENTApp extends StatelessWidget {
             title: "ChatDENT",
             key: WK.fluentApp,
             locale: Locale(locale.s.$code),
-            theme: localSettings.selectedTheme == ThemeMode.dark
-                ? FluentThemeData.dark()
-                : FluentThemeData.light(),
+            theme: chatDentLightTheme(),
+            darkTheme: chatDentDarkTheme(),
+            themeMode: localSettings.selectedTheme,
             home: CupertinoTheme(
               data: localSettings.selectedTheme == ThemeMode.dark
                   ? const CupertinoThemeData(brightness: Brightness.dark)
                   : const CupertinoThemeData(brightness: Brightness.light),
               child: FluentTheme(
                 data: localSettings.selectedTheme == ThemeMode.dark
-                    ? FluentThemeData.dark()
-                    : FluentThemeData(),
+                    ? chatDentDarkTheme()
+                    : chatDentLightTheme(),
                 child: MStreamBuilder(
                   streams: [
                     version.isOutdated.stream,
@@ -177,7 +177,7 @@ class ChatDENTApp extends StatelessWidget {
           final hideSidePanel =
               routes.panels().isEmpty || launch.open() != Open.staff;
           return Container(
-            color: FluentTheme.of(context).menuColor,
+            color: ChatDentPalette.of(context).chrome,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -203,6 +203,13 @@ class ChatDENTApp extends StatelessWidget {
   Widget _buildPositionedMainScreen(
       BoxConstraints constraints, bool hideSidePanel, BuildContext context) {
     final hasKeyboard = MediaQuery.of(context).viewInsets.bottom > 0;
+    final wantBottomNav =
+        launch.open() == Open.staff && constraints.maxWidth < 710;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (routes.showBottomNav() != wantBottomNav) {
+        routes.showBottomNav(wantBottomNav);
+      }
+    });
     return AnimatedPositioned(
       duration: hasKeyboard ? Duration.zero : const Duration(milliseconds: 300),
       top: 0,
@@ -214,13 +221,24 @@ class ChatDENTApp extends StatelessWidget {
           : constraints.maxWidth,
       child: Container(
         decoration: BoxDecoration(boxShadow: kElevationToShadow[6]),
-        child: NavigationView(
+        child: Stack(
+          children: [
+            NavigationView(
+          clipBehavior: constraints.maxWidth <= 640 ? Clip.antiAlias : Clip.none,
+          contentShape: constraints.maxWidth <= 640
+              ? null
+              : const RoundedRectangleBorder(
+                  side: BorderSide(color: Colors.transparent),
+                  borderRadius: BorderRadius.zero,
+                ),
           appBar: NavigationAppBar(
-            leading: (routes.history.isNotEmpty && launch.open() == Open.staff)
-                ? const BackButton()
-                : null,
+            leading: _staffAppBarLeading(constraints),
             automaticallyImplyLeading: false,
             height: 40,
+            decoration: BoxDecoration(
+              color: ChatDentPalette.of(context).chrome,
+              boxShadow: chatDentAppBarShadow,
+            ),
             actions: const NetworkActions(key: WK.globalActions),
             // ignore: prefer_const_constructors
             title: NavScreenTitle(),
@@ -228,7 +246,7 @@ class ChatDENTApp extends StatelessWidget {
           onDisplayModeChanged: (mode) {
             if (mode == PaneDisplayMode.minimal && constraints.maxWidth < 710) {
               routes.showBottomNav(true);
-            } else {
+            } else if (constraints.maxWidth >= 710) {
               routes.showBottomNav(false);
             }
           },
@@ -237,54 +255,81 @@ class ChatDENTApp extends StatelessWidget {
               ? LoginScreen()
               : launch.open() == Open.patient
                   ? const PatientSideScreen()
-                  : null,
-          pane: launch.open() == Open.staff
+                  : constraints.maxWidth <= 640
+                      ? _staffRouteBody(constraints)
+                      : null,
+          pane: launch.open() == Open.staff && constraints.maxWidth > 640
               ? NavigationPane(
-                  header: const Column(
-                    children: [
-                      AppLogo(),
-                      CurrentAccount(),
-                    ],
-                  ),
+                  size: const NavigationPaneSize(openWidth: kSidebarOpenWidth),
+                  header: null,
+                  indicator: const NavigationIndicator(),
                   selected: routes.currentRouteIndex(),
-                  displayMode: PaneDisplayMode.auto,
+                  displayMode: localSettings.sidebarCollapsed
+                      ? PaneDisplayMode.compact
+                      : PaneDisplayMode.open,
                   toggleable: false,
-                  items: List<NavigationPaneItem>.from(
-                      routes.allRoutes.where((p) => p.onFooter != true).map(
-                            (route) => PaneItem(
-                              key: Key("${route.identifier}_screen_button"),
-                              icon: route.accessible
-                                  ? Icon(route.icon)
-                                  : const Icon(WindowsIcons.lock),
-                              body: route.accessible
-                                  ? KeyedSubtree(
-                                      key: _bodyKeyFor(route.identifier),
-                                      child: Padding(
-                                        padding: EdgeInsets.only(
-                                            bottom: (routes.showBottomNav() &&
-                                                    constraints.maxWidth < 710)
-                                                ? 66
-                                                : 0),
-                                        child: (route.screen)(),
-                                      ),
-                                    )
-                                  : const SizedBox(),
-                              title: Txt(route.title),
-                              onTap: () => route.accessible
-                                  ? routes.navigate(route.identifier)
-                                  : null,
-                              enabled: route.accessible,
-                            ),
-                          )),
+                  items: [
+                    PaneItemWidgetAdapter(
+                        applyPadding: false,
+                        child: SizedBox(
+                          // Overlay chrome covers the 40px app bar, so the pane
+                          // only needs the remainder of logo + account height.
+                          height: kSidebarChromeHeight - kSidebarAppBarHeight,
+                          width: double.infinity,
+                        ),
+                      ),
+                    ...routes.allRoutes.where((p) => p.onFooter != true).map(
+                          (route) => PaneItem(
+                            key: Key("${route.identifier}_screen_button"),
+                            icon: route.accessible
+                                ? Icon(route.icon, size: 18)
+                                : const Icon(WindowsIcons.lock, size: 18),
+                            selectedTileColor:
+                                ChatDentPalette.of(context).selectedTileColor,
+                            body: route.accessible
+                                ? KeyedSubtree(
+                                    key: _bodyKeyFor(route.identifier),
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                          bottom: (routes.showBottomNav() &&
+                                                  constraints.maxWidth < 710)
+                                              ? 66
+                                              : 0),
+                                      child: (route.screen)(),
+                                    ),
+                                  )
+                                : const SizedBox(),
+                            title: Txt(route.title),
+                            trailing: null,
+                            onTap: () => route.accessible
+                                ? routes.navigate(route.identifier)
+                                : null,
+                            enabled: route.accessible,
+                          ),
+                        ),
+                  ],
                   footerItems: [
                     ...routes.allRoutes.where((p) => p.onFooter == true).map(
                           (route) => PaneItem(
-                            icon: Icon(route.icon),
+                            key: Key("${route.identifier}_screen_button"),
+                            icon: Icon(route.icon, size: 18),
+                            selectedTileColor:
+                                ChatDentPalette.of(context).selectedTileColor,
                             body: KeyedSubtree(
                               key: _bodyKeyFor(route.identifier),
-                              child: (route.screen)(),
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                    bottom: (routes.showBottomNav() &&
+                                            constraints.maxWidth < 710)
+                                        ? 66
+                                        : 0),
+                                child: (route.screen)(),
+                              ),
                             ),
                             title: Txt(route.title),
+                            trailing: route.identifier == 'settings'
+                                ? const AppVersionLabel()
+                                : null,
                             onTap: () => route.accessible
                                 ? routes.navigate(route.identifier)
                                 : null,
@@ -293,9 +338,102 @@ class ChatDENTApp extends StatelessWidget {
                   ],
                 )
               : null,
+            ),
+            if (launch.open() == Open.staff && constraints.maxWidth > 640)
+              PositionedDirectional(
+                top: 0,
+                start: 0,
+                width: localSettings.sidebarCollapsed
+                    ? kCompactNavigationPaneWidth
+                    : kSidebarOpenWidth,
+                child: const SidebarChrome(),
+              ),
+            if (launch.open() == Open.staff)
+              PositionedDirectional(
+                top: kSidebarAppBarHeight - 18,
+                start: constraints.maxWidth > 640
+                    ? (localSettings.sidebarCollapsed
+                        ? kCompactNavigationPaneWidth
+                        : kSidebarOpenWidth)
+                    : 0,
+                end: 0,
+                height: 18,
+                child: const IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Color.fromRGBO(80, 80, 80, 0.175),
+                          Color.fromRGBO(80, 80, 80, 0.05),
+                          Color.fromRGBO(80, 80, 80, 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (launch.open() == Open.staff && constraints.maxWidth > 640)
+              PositionedDirectional(
+                top: 0,
+                bottom: 0,
+                start: (localSettings.sidebarCollapsed
+                        ? kCompactNavigationPaneWidth
+                        : kSidebarOpenWidth) -
+                    24,
+                child: IgnorePointer(
+                  child: SizedBox(
+                    width: 24,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            ChatDentPalette.of(context)
+                                .stone
+                                .withValues(alpha: 0.0),
+                            ChatDentPalette.of(context)
+                                .stone
+                                .withValues(alpha: 0.03),
+                            ChatDentPalette.of(context)
+                                .stone
+                                .withValues(alpha: 0.03),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
+  }
+
+  /// Phone/tablet compact shell: paint the selected screen in [NavigationView.content]
+  /// because Fluent pane bodies stay blank in minimal mode on Android.
+  Widget _staffRouteBody(BoxConstraints constraints) {
+    final route = routes.currentRoute;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: constraints.maxWidth < 710 ? 66 : 0,
+      ),
+      child: route.accessible ? (route.screen)() : const SizedBox.shrink(),
+    );
+  }
+
+  /// Pushes the Dashboard/Patients pill into the content app bar so it is
+  /// never painted under [SidebarChrome] / the logo.
+  Widget? _staffAppBarLeading(BoxConstraints constraints) {
+    if (launch.open() != Open.staff) return null;
+    if (constraints.maxWidth <= 640) return null;
+    final sidebarWidth = localSettings.sidebarCollapsed
+        ? kCompactNavigationPaneWidth
+        : kSidebarOpenWidth;
+    return SizedBox(width: sidebarWidth);
   }
 
   Widget _buildPositionedPanel(
@@ -358,6 +496,7 @@ class _NavScreenTitleState extends State<NavScreenTitle> {
 
   @override
   Widget build(BuildContext context) {
+    final p = ChatDentPalette.of(context);
     return FlyoutTarget(
       controller: controller,
       child: GestureDetector(
@@ -366,9 +505,7 @@ class _NavScreenTitleState extends State<NavScreenTitle> {
           await flyoutFocusFix(context);
           controller.showFlyout(builder: (ctx) {
             return MenuFlyout(
-              items: routes.allRoutes
-                  .where((p) => p.onFooter != true)
-                  .map((route) {
+              items: routes.allRoutes.map((route) {
                 return MenuFlyoutItem(
                   leading: Icon(route.icon),
                   selected: route.identifier == routes.currentRoute.identifier,
@@ -383,38 +520,58 @@ class _NavScreenTitleState extends State<NavScreenTitle> {
           });
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(50),
             color: launch.open() == Open.staff
-                ? Colors.white
-                : Colors.grey.withValues(alpha: 0.6),
+                ? p.card
+                : p.muted.withValues(alpha: 0.6),
             border: Border.all(
-                color: FluentTheme.of(context).inactiveColor.withAlpha(40)),
+              color: p.stone.withValues(alpha: 0.1),
+            ),
+            boxShadow: launch.open() == Open.staff
+                ? [
+                    BoxShadow(
+                      color: p.stone.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            spacing: 5,
+            spacing: 6,
             children: [
               Icon(
                 launch.open() == Open.staff
                     ? routes.currentRoute.icon
                     : WindowsIcons.lock,
-                color: Colors.grey,
+                size: 14,
+                color: p.muted,
               ),
               launch.open() == Open.staff
                   ? Txt(
                       routes.currentRoute.title,
-                      style: const TextStyle(color: Colors.grey),
+                      style: TextStyle(
+                        color: p.muted,
+                        fontSize: 12,
+                      ),
                     )
                   : launch.open() == Open.patient
                       ? Txt(
                           txt("patientSide"),
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(
+                            color: p.muted,
+                            fontSize: 12,
+                          ),
                         )
                       : Txt(
                           txt("login"),
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(
+                            color: p.muted,
+                            fontSize: 12,
+                          ),
                         )
             ],
           ),

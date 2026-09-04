@@ -45,10 +45,12 @@ class PhoneNumberButton extends StatefulWidget {
     super.key,
     required this.phoneNumbers,
     this.onlyIcon = true,
+    this.showFlag = true,
   });
 
   final List<ParsedPhoneNumber> phoneNumbers;
   final bool onlyIcon;
+  final bool showFlag;
 
   @override
   State<PhoneNumberButton> createState() => PhoneNumberButtonState();
@@ -96,10 +98,11 @@ class PhoneNumberButtonState extends State<PhoneNumberButton> {
                       spacing: 5,
                       children: [
                         const Icon(WindowsIcons.phone),
-                        CountryFlag.fromCountryCode(
-                          widget.phoneNumbers.first.isoCode,
-                          theme: const ImageTheme(height: 20, width: 20),
-                        ),
+                        if (widget.showFlag)
+                          CountryFlag.fromCountryCode(
+                            widget.phoneNumbers.first.isoCode,
+                            theme: const ImageTheme(height: 20, width: 20),
+                          ),
                         Text(
                           widget.phoneNumbers.first.toInternationalFormat(),
                           textDirection: TextDirection.ltr,

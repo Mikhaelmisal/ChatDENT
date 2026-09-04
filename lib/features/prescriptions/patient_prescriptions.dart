@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/core/multi_stream_builder.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
@@ -33,13 +34,6 @@ class PatientPrescriptions extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: InfoBar(
-                title: Txt(txt('patientPrescriptionsInfo')),
-                severity: InfoBarSeverity.info,
-              ),
-            ),
             if (apts.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(12),
@@ -67,31 +61,27 @@ class _PrescriptionVisitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
+    final p = ChatDentPalette.of(context);
     final lines = appointment.prescriptions
         .map((p) => PrescriptionLine.parse(p).toDisplay())
         .toList();
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.resources.dividerStrokeColorDefault),
-        borderRadius: BorderRadius.circular(6),
-        color: theme.cardColor,
-      ),
+      decoration: chatDentInnerCard(p),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 8,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Icon(FluentIcons.pill, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Txt(
-                  '${txt("prescription")} · ${DF.commonDate(appointment.date)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+              Txt(
+                '${txt("prescription")} · ${DF.commonDate(appointment.date)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               Button(
                 onPressed: () {

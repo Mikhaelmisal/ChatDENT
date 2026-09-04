@@ -29,9 +29,13 @@ Create `.env` in the project root (same folder as `docker-compose.yml`):
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
+N8N_BOOKING_TOKEN=paste-the-same-token-as-Settings-clinic-hours
+EVOLUTION_API_KEY=clinic_secret_key_123
 ```
 
-Leave the key empty only if you will not run the WhatsApp AI yet. n8n reads this file when the container starts.
+`N8N_BOOKING_TOKEN` must match **Settings → Clinic hours → n8n booking API token**. After changing `.env`, recreate n8n (`docker compose up -d n8n --force-recreate`).
+
+Leave OpenRouter empty only if you will not run the WhatsApp AI yet. n8n reads this file when the container starts.
 
 ## 3. Start the servers
 
@@ -88,7 +92,7 @@ The first login sets up the database. After it loads, open **Settings**.
    - Instance name: `clinic_default`
    - Clinic name, address, Google Maps, staff group ID
    - Marketing instance 1–4: leave empty until extra WhatsApp numbers are connected
-3. **Clinic hours** and booking token (`n8n_book_token_` / header `X-Booking-Token`)
+3. **Clinic hours** and booking token. Copy that token into `.env` as `N8N_BOOKING_TOKEN` (n8n sends it as `X-Booking-Token`).
 4. **WhatsApp templates** — welcome, confirm, reminder, birthday, review, staff alerts, opt-out
 5. **WhatsApp campaign** — review link, flyer, quiet hours, treatments (no prices)
 
@@ -110,12 +114,14 @@ Fully restart the Flutter app after first-time template seed (hot reload is not 
 ## 8. Import n8n workflows
 
 1. Open http://localhost:5678 and create the n8n owner account.
-2. Import (keep **ChatDENT WhatsApp booking** **inactive** so it does not steal the webhook):
+2. Import these four (delete any old duplicates in n8n first):
 
    - `n8n_workflows/chatdent-whatsapp-assistant.json` — **activate**
-   - `n8n_workflows/chatdent-reminders.json`
-   - `n8n_workflows/chatdent-birthdays-reviews.json`
-   - `n8n_workflows/chatdent-marketing.json`
+   - `n8n_workflows/chatdent-reminders.json` — activate when ready
+   - `n8n_workflows/chatdent-birthdays-reviews.json` — activate when ready
+   - `n8n_workflows/chatdent-marketing.json` — activate only if using marketing blast
+
+   Do not import any other workflow JSON for ChatDENT.
 
 3. If you change the JS in `n8n_workflows/js/`, rebuild JSON:
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/common_widgets/appointments_list_footer.dart';
 import 'package:chatdent/common_widgets/audio_recorder.dart';
@@ -33,6 +34,7 @@ import 'package:chatdent/common_widgets/tag_input.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/leads/clinic_whatsapp.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
+import 'package:chatdent/features/invoices/patient_invoices.dart';
 import 'package:chatdent/features/prescriptions/patient_prescriptions.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
@@ -134,13 +136,7 @@ Future<Patient> openPatient([Patient? patient, int? selectedTabIndex]) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      decoration: BoxDecoration(
-                          color: FluentTheme.of(context)
-                              .resources
-                              .solidBackgroundFillColorBase,
-                          borderRadius: BorderRadius.circular(5),
-                          border:
-                              Border.all(color: Colors.grey.withAlpha(100))),
+                      decoration: chatDentInnerCard(ChatDentPalette.of(context)),
                       padding: const EdgeInsets.all(4),
                       child: TeethSelector(
                         key: ValueKey(jsonEncode({
@@ -201,6 +197,14 @@ Future<Patient> openPatient([Patient? patient, int? selectedTabIndex]) {
           title: txt("prescriptions"),
           icon: FluentIcons.pill,
           body: PatientPrescriptions(editingCopy),
+          onlyIfSaved: true,
+          padding: 0,
+        ),
+      if (login.perm(Perm.appointments).some)
+        PanelTab(
+          title: txt("invoices"),
+          icon: FluentIcons.money,
+          body: PatientInvoices(editingCopy),
           onlyIfSaved: true,
           padding: 0,
         ),
@@ -312,10 +316,7 @@ class _PatientWebPage extends StatelessWidget {
       const SizedBox(height: 10),
       Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(5),
-        ),
+        decoration: chatDentInnerCard(ChatDentPalette.of(context)),
         child: SelectableText(patient.shortLink),
       ),
       QRLink(link: patient.shortLink),
@@ -369,39 +370,38 @@ class PatientAppointments extends StatelessWidget {
                     if (!hide.contains(AppointmentSections.paymentSummary))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(10, 10, 12, 50),
-                        child: Container(
+                        child: Builder(builder: (context) {
+                          final p = ChatDentPalette.of(context);
+                          return Container(
                           padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(5),
-                            boxShadow: [
-                              BoxShadow(
-                                offset: const Offset(0.0, 6.0),
-                                blurRadius: 30.0,
-                                spreadRadius: 5.0,
-                                color: Colors.grey.withAlpha(50),
-                              )
-                            ],
-                            border: Border(
-                                top: BorderSide(
-                              color: (colorBasedOnPayments(patient.paymentsMade,
-                                          patient.pricesGiven) ??
-                                      FluentTheme.of(context).cardColor)
-                                  .withValues(alpha: 0.3),
-                              width: 5,
-                            )),
+                          decoration: chatDentInnerCard(p).copyWith(
+                            boxShadow: chatDentPopupShadow(p),
                           ),
                           child: Column(
                             children: [
+                              Container(
+                                height: 4,
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: (colorBasedOnPayments(
+                                              patient.paymentsMade,
+                                              patient.pricesGiven) ??
+                                          p.fluentBlue)
+                                      .withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
                               Padding(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 5),
                                 child: Txt(
                                     "${txt("paymentSummary")} (${currency()})",
-                                    style: const TextStyle(
+                                    style: TextStyle(
+                                        fontFamily: ChatDentFonts.ui,
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.grey)),
+                                        color: p.muted)),
                               ),
                               const SizedBox(height: 10),
                               const Divider(),
@@ -412,21 +412,19 @@ class PatientAppointments extends StatelessWidget {
                                 runSpacing: 10,
                                 children: [
                                   PaymentPill(
-                                    finalTextColor: Colors.grey,
+                                    finalTextColor: p.muted,
                                     title: txt("cost"),
                                     amount:
                                         patient.pricesGiven.toStringAsFixed(2),
-                                    color: Colors.white,
                                   ),
                                   PaymentPill(
-                                    finalTextColor: Colors.grey,
+                                    finalTextColor: p.muted,
                                     title: txt("paid"),
                                     amount:
                                         patient.paymentsMade.toStringAsFixed(2),
-                                    color: Colors.white,
                                   ),
                                   PaymentPill(
-                                    finalTextColor: Colors.grey,
+                                    finalTextColor: p.muted,
                                     title: patient.overPaid
                                         ? txt("overpaid")
                                         : patient.underPaid
@@ -441,7 +439,8 @@ class PatientAppointments extends StatelessWidget {
                               ),
                             ],
                           ),
-                        ),
+                        );
+                        }),
                       ),
                   ],
           );
@@ -551,18 +550,19 @@ class _PatientDetailsState extends State<_PatientDetails> {
   }
 
   TextStyle _fieldTextStyle(BuildContext context) {
-    final body = FluentTheme.of(context).typography.body;
+    final p = ChatDentPalette.of(context);
     return TextStyle(
-      fontSize: body?.fontSize ?? 14,
+      fontFamily: ChatDentFonts.ui,
+      fontSize: FluentTheme.of(context).typography.body?.fontSize ?? 14,
       fontWeight: FontWeight.w600,
-      color: body?.color,
+      color: p.stone,
     );
   }
 
   TextStyle _fieldPlaceholderStyle(BuildContext context) {
     return _fieldTextStyle(context).copyWith(
       fontWeight: FontWeight.w400,
-      color: FluentTheme.of(context).resources.textFillColorSecondary,
+      color: ChatDentPalette.of(context).muted,
     );
   }
 
@@ -570,8 +570,10 @@ class _PatientDetailsState extends State<_PatientDetails> {
   Widget build(BuildContext context) {
     final inputStyle = _fieldTextStyle(context);
     final hintStyle = _fieldPlaceholderStyle(context);
+    final fieldFill = chatDentFieldFill(ChatDentPalette.of(context));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 10,
       children: [
         InfoLabel(
           label: "${txt("name")}:",
@@ -581,36 +583,12 @@ class _PatientDetailsState extends State<_PatientDetails> {
             placeholder: "${txt("name")}...",
             style: inputStyle,
             placeholderStyle: hintStyle,
+            decoration: fieldFill,
             controller: nameController,
             onChanged: (value) => widget.patient.title = value,
           ),
         ),
         Row(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            width: 72,
-            child: InfoLabel(
-              label: "${txt("age")}:",
-              isHeader: true,
-              child: Container(
-                height: 32,
-                alignment: AlignmentDirectional.centerStart,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(5),
-                  color: FluentTheme.of(context)
-                      .resources
-                      .controlFillColorDisabled,
-                ),
-                child: Txt(
-                  widget.patient.age > 0
-                      ? widget.patient.age.toString()
-                      : "—",
-                  style: inputStyle,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
           Expanded(
             flex: 2,
             child: InfoLabel(
@@ -623,6 +601,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
                 placeholder: "DD/MM/YYYY",
                 style: inputStyle,
                 placeholderStyle: hintStyle,
+                decoration: fieldFill,
                 keyboardType: TextInputType.number,
                 controller: birthdateController,
                 inputFormatters: [ddMmYyyyInputFormatter],
@@ -676,6 +655,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
             placeholder: "${txt("email")}...",
             style: inputStyle,
             placeholderStyle: hintStyle,
+            decoration: fieldFill,
             controller: emailTextController,
             onChanged: (value) {
               setState(() {
@@ -718,6 +698,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
             placeholder: "9876543210",
             style: inputStyle,
             placeholderStyle: hintStyle,
+            decoration: fieldFill,
             keyboardType: TextInputType.phone,
             controller: phoneTextController,
             inputFormatters: [
@@ -734,7 +715,6 @@ class _PatientDetailsState extends State<_PatientDetails> {
         if (phoneTextController.text.isNotEmpty &&
             phoneTextController.text.length < IndiaPhone.localLength)
           Txt(txt("phoneMustBe10Digits")),
-        const SizedBox(height: 10),
         InfoLabel(
           label: "${txt("patientIntakeSource")}:",
           isHeader: true,
@@ -761,22 +741,6 @@ class _PatientDetailsState extends State<_PatientDetails> {
             },
           ),
         ),
-        const SizedBox(height: 10),
-        Checkbox(
-          checked: widget.patient.whatsappHold,
-          content: Text(txt("whatsappHoldPatient")),
-          onChanged: (v) {
-            setState(() {
-              widget.patient.whatsappHold = v == true;
-            });
-          },
-        ),
-        if (widget.patient.whatsappHold)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 6),
-            child: Txt(txt("whatsappHoldPatientHint")),
-          ),
-        const SizedBox(height: 10),
         InfoLabel(
           label: "${txt("address")}:",
           isHeader: true,
@@ -785,6 +749,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
             controller: addressController,
             style: inputStyle,
             placeholderStyle: hintStyle,
+            decoration: fieldFill,
             onChanged: (value) => widget.patient.address = value,
             placeholder: "${txt("address")}...",
           ),
@@ -821,8 +786,77 @@ class _PatientDetailsState extends State<_PatientDetails> {
             limit: 9999,
             placeholder: "${txt("patientTags")}...",
           ),
-        )
-      ].map((e) => [e, const SizedBox(height: 10)]).expand((e) => e).toList(),
+        ),
+        Checkbox(
+          checked: widget.patient.whatsappHold,
+          content: Text(txt("whatsappHoldPatient")),
+          onChanged: (v) {
+            setState(() {
+              widget.patient.whatsappHold = v == true;
+            });
+          },
+        ),
+        if (widget.patient.whatsappHold)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Txt(txt("whatsappHoldPatientHint")),
+          ),
+        Checkbox(
+          checked: widget.patient.treatmentCompleted,
+          content: Text(txt("treatmentCompleted")),
+          onChanged: (v) {
+            setState(() {
+              widget.patient.treatmentCompleted = v == true;
+            });
+          },
+        ),
+        if (widget.patient.reviewDone)
+          Txt(txt("reviewAlreadyReceived"))
+        else if (widget.patient.reviewAskCount >= 1)
+          Txt(txt("reviewAlreadySent"))
+        else
+          FilledButton(
+            onPressed: !widget.patient.treatmentCompleted ||
+                    widget.patient.whatsappHold ||
+                    widget.patient.phonesString.trim().isEmpty
+                ? null
+                : () async {
+                    final ok =
+                        await ClinicWhatsApp.sendReviewRequest(widget.patient);
+                    if (!context.mounted) return;
+                    setState(() {});
+                    if (ok) {
+                      displayInfoBar(
+                        context,
+                        builder: (context, close) => InfoBar(
+                          title: Txt(txt("reviewRequestSent")),
+                          severity: InfoBarSeverity.success,
+                          action: IconButton(
+                            icon: const Icon(FluentIcons.clear),
+                            onPressed: close,
+                          ),
+                        ),
+                      );
+                    } else {
+                      displayInfoBar(
+                        context,
+                        builder: (context, close) => InfoBar(
+                          title: Txt(txt("reviewRequestSkipped")),
+                          severity: InfoBarSeverity.warning,
+                          action: IconButton(
+                            icon: const Icon(FluentIcons.clear),
+                            onPressed: close,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+            child: ButtonContent(
+              FluentIcons.favorite_star,
+              txt("sendReviewRequest"),
+            ),
+          ),
+      ],
     );
   }
 }

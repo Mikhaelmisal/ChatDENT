@@ -26,7 +26,7 @@ class DurationPill extends StatefulWidget {
 
 class _DurationPillState extends State<DurationPill> {
   final _durationFlyout = FlyoutController();
-  static const _durations = [15, 30, 45, 60, 90, 120];
+  static const _durations = [15, 20, 30, 45, 60, 90, 120];
 
   @override
   void dispose() {

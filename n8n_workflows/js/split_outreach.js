@@ -1,3 +1,11 @@
+function n8nEnv(name, fallback) {
+  try {
+    const v = $env[name];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  } catch (e) {}
+  return fallback == null ? '' : fallback;
+}
+
 const body = $input.first().json || {};
 const clinic = body.clinicName || 'the clinic';
 const url = body.googleReviewUrl || '';
@@ -12,9 +20,9 @@ return people.map(function (p) {
     .replace(/\{reviewUrl\}/g, url);
   return {
     json: {
-      evoBase: 'http://evolution-api:8080',
-      evoKey: 'clinic_secret_key_123',
-      evoInstance: 'clinic_default',
+      evoBase: n8nEnv('N8N_EVO_BASE', 'http://evolution-api:8080'),
+      evoKey: n8nEnv('EVOLUTION_API_KEY', ''),
+      evoInstance: n8nEnv('WHATSAPP_SESSION_ID', 'clinic_default'),
       number: String(p.phone || '').replace(/\D/g, ''),
       reply: text,
       phone: String(p.phone || '').replace(/\D/g, ''),

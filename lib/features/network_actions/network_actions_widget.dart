@@ -1,3 +1,4 @@
+import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/core/multi_stream_builder.dart';
 import 'package:chatdent/features/login/login_controller.dart';
 import 'package:chatdent/features/network_actions/network_actions_controller.dart';
@@ -7,14 +8,16 @@ import 'package:chatdent/common_widgets/transitions/rotate.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/launch.dart';
 import 'package:chatdent/services/network.dart';
+import 'package:chatdent/services/whatsapp_status.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class NetworkActions extends StatelessWidget {
   const NetworkActions({super.key});
   @override
   Widget build(BuildContext context) {
+    whatsappStatus.ensurePolling();
     return Padding(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: MStreamBuilder(
           streams: [
             networkActions.isSyncing.stream,
@@ -24,16 +27,17 @@ class NetworkActions extends StatelessWidget {
             launch.open.stream,
             networkActions.hasErrors.stream,
             networkActions.errorPulse.stream,
+            whatsappStatus.link.stream,
           ],
           builder: (context, _) {
             return Row(
-              spacing: 2,
+              spacing: 4,
               mainAxisSize: MainAxisSize.min,
               children: [
                 ...networkActions.actions
                     .where((action) => action.hidden != true)
                     .map(
-                      (action) => _buildActionItem(action),
+                      (action) => _buildActionItem(context, action),
                     )
               ],
             );
@@ -41,14 +45,12 @@ class NetworkActions extends StatelessWidget {
     );
   }
 
-  Widget _buildActionItem(NetworkAction action) {
-    // Check if this is the error/reconnect action with active errors
+  Widget _buildActionItem(BuildContext context, NetworkAction action) {
     final isErrorAction =
         networkActions.hasErrors() && action.activeColor == Colors.red;
 
-    Widget iconWidget = _buildActionIcon(action);
+    Widget iconWidget = _buildActionIcon(context, action, isErrorAction);
 
-    // Wrap with pulse animation for the error action
     if (isErrorAction) {
       iconWidget = PulseWrapper(
         key: ValueKey("errorPulse_${networkActions.errorPulse()}"),
@@ -57,7 +59,6 @@ class NetworkActions extends StatelessWidget {
       );
     }
 
-    // Wrap with FlyoutTarget for the error action
     if (isErrorAction) {
       iconWidget = FlyoutTarget(
         controller: errorsFlyoutController,
@@ -75,25 +76,42 @@ class NetworkActions extends StatelessWidget {
     );
   }
 
-  Widget _buildActionIcon(NetworkAction action) {
+  Widget _buildActionIcon(
+    BuildContext context,
+    NetworkAction action,
+    bool isErrorAction,
+  ) {
+    final p = ChatDentPalette.of(context);
     return RotatingWrapper(
       key: Key(action.hashCode.toString()),
       rotate: action.animate == true && action.processing == true,
       child: Tooltip(
         message: action.tooltip,
-        child: IconButton(
-          icon: action.icon,
-          onPressed: action.onPressed,
-          iconButtonMode: IconButtonMode.large,
-          style: ButtonStyle(
-              shape: WidgetStatePropertyAll(RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50))),
-              iconSize: WidgetStateProperty.all(18),
-              foregroundColor: WidgetStatePropertyAll(
-                  action.processing ?? false ? Colors.white : null),
-              backgroundColor: WidgetStatePropertyAll(action.processing ?? false
-                  ? action.activeColor
-                  : Colors.transparent)),
+        child: HoverButton(
+          onPressed: action.disabled == true ? null : action.onPressed,
+          builder: (context, states) {
+            final hovered = states.isHovered || states.isPressed;
+            return Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isErrorAction
+                    ? action.activeColor
+                    : hovered
+                        ? p.stone.withValues(alpha: 0.05)
+                        : Colors.transparent,
+              ),
+              child: IconTheme(
+                data: IconThemeData(
+                  size: 18,
+                  color: isErrorAction ? Colors.white : p.stone,
+                ),
+                child: action.icon,
+              ),
+            );
+          },
         ),
       ),
     );
@@ -101,7 +119,7 @@ class NetworkActions extends StatelessWidget {
 
   Positioned _buildBadge(NetworkAction action) {
     return Positioned(
-      bottom: -5,
+      bottom: -2,
       right: -2,
       child: Container(
         height: 14,

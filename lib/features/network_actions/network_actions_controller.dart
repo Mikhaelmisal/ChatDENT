@@ -1,5 +1,7 @@
 import 'package:chatdent/common_widgets/static_notifications_widget.dart';
+import 'package:chatdent/common_widgets/whatsapp_status_light.dart';
 import 'package:chatdent/features/login/login_controller.dart';
+import 'package:chatdent/services/whatsapp_status.dart';
 import 'package:chatdent/features/network_actions/errors_list_widget.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/launch.dart';
@@ -106,30 +108,23 @@ class _NetworkActions {
 
   List<NetworkAction> get actions {
     return [
-      // coming soon: chat with staff feature
-      // NetworkAction(
-      //   tooltip: "Chat",
-      //   icon: WindowsIcons.action_center,
-      //   onPressed: () {},
-      //   activeColor: Colors.transparent,
-      //   badge: "12",
-      // ),
-      if (launch.open() != Open.login)
+      if (launch.open() == Open.staff)
         NetworkAction(
-          tooltip: txt("notifications"),
-          activeColor: Colors.blue,
-          badge: staticNotifications.notifications.isNotEmpty
-              ? staticNotifications.notifications.length.toString()
-              : null,
-          processing: staticNotifications.notifications.isNotEmpty,
-          icon: const StaticNotificationsIcon(),
-          onPressed: showStaticNotifications,
+          tooltip: whatsappStatusTooltip(),
+          activeColor: Colors.transparent,
+          icon: const WhatsAppStatusLight(),
+          onPressed: () {
+            whatsappStatus.refresh();
+          },
         ),
       NetworkAction(
         tooltip: "Theme",
-        icon: Icon((localSettings.selectedTheme == ThemeMode.light)
-            ? FluentIcons.sunny
-            : FluentIcons.clear_night),
+        icon: Icon(
+          (localSettings.selectedTheme == ThemeMode.light)
+              ? FluentIcons.sunny
+              : FluentIcons.clear_night,
+          size: 18,
+        ),
         onPressed: () {
           localSettings.selectedTheme =
               localSettings.selectedTheme == ThemeMode.dark
@@ -141,29 +136,13 @@ class _NetworkActions {
         activeColor: Colors.transparent,
       ),
       NetworkAction(
-        tooltip: txt("synchronizing"),
-        icon: const Icon(FluentIcons.sync),
-        onPressed: () async {
-          if (launch.isDemo) return;
-          await resync();
-        },
-        badge: (launch.open() == Open.patient)
-            ? null
-            : isSyncing() > 0
-                ? "${isSyncing()}"
-                : syncCallbacks.length.toString(),
-        disabled: (network.isOnline() == false ||
-            isSyncing() > 0 ||
-            loginCtrl.proceededOffline()),
-        processing: isSyncing() > 0 || loginCtrl.loadingIndicator().isNotEmpty,
-        animate: true,
-        activeColor: Colors.blue,
-      ),
-      NetworkAction(
         tooltip: hasErrors() ? txt("errors") : txt("reconnect"),
-        icon: Icon((network.isOnline() && !loginCtrl.proceededOffline())
-            ? FluentIcons.streaming
-            : FluentIcons.streaming_off),
+        icon: Icon(
+          (network.isOnline() && !loginCtrl.proceededOffline())
+              ? FluentIcons.streaming
+              : FluentIcons.streaming_off,
+          size: 18,
+        ),
         onPressed: hasErrors()
             ? () => showErrorsFlyout()
             : () async {
@@ -178,6 +157,31 @@ class _NetworkActions {
         animate: false,
         activeColor: hasErrors() ? Colors.red : Colors.teal,
       ),
+      NetworkAction(
+        tooltip: txt("synchronizing"),
+        icon: const Icon(FluentIcons.sync, size: 18),
+        onPressed: () async {
+          if (launch.isDemo) return;
+          await resync();
+        },
+        disabled: (network.isOnline() == false ||
+            isSyncing() > 0 ||
+            loginCtrl.proceededOffline()),
+        processing: isSyncing() > 0 || loginCtrl.loadingIndicator().isNotEmpty,
+        animate: true,
+        activeColor: Colors.blue,
+      ),
+      if (launch.open() != Open.login)
+        NetworkAction(
+          tooltip: txt("notifications"),
+          activeColor: Colors.blue,
+          badge: staticNotifications.notifications.isNotEmpty
+              ? staticNotifications.notifications.length.toString()
+              : null,
+          processing: staticNotifications.notifications.isNotEmpty,
+          icon: const StaticNotificationsIcon(),
+          onPressed: showStaticNotifications,
+        ),
     ];
   }
 }

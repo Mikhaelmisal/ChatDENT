@@ -17,6 +17,45 @@ class DayHours {
     this.breakEnd,
   });
 
+  /// Morning [morningOpen]–[morningClose], optional evening [eveningOpen]–[eveningClose].
+  factory DayHours.sessions({
+    required int morningOpen,
+    required int morningClose,
+    int? eveningOpen,
+    int? eveningClose,
+  }) {
+    if (eveningOpen == null || eveningClose == null) {
+      return DayHours(open: morningOpen, close: morningClose);
+    }
+    return DayHours(
+      open: morningOpen,
+      close: eveningClose,
+      breakStart: morningClose,
+      breakEnd: eveningOpen,
+    );
+  }
+
+  int get morningOpen => open;
+  int get morningClose => breakStart ?? close;
+  bool get hasEvening => breakStart != null && breakEnd != null;
+  int? get eveningOpen => breakEnd;
+  int? get eveningClose => hasEvening ? close : null;
+
+  DayHours copyWith({
+    int? open,
+    int? close,
+    int? breakStart,
+    int? breakEnd,
+    bool clearBreak = false,
+  }) {
+    return DayHours(
+      open: open ?? this.open,
+      close: close ?? this.close,
+      breakStart: clearBreak ? null : (breakStart ?? this.breakStart),
+      breakEnd: clearBreak ? null : (breakEnd ?? this.breakEnd),
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'open': open,
         'close': close,
@@ -37,6 +76,8 @@ class DayHours {
 class ClinicHours {
   static const settingId = 'clinic_hours___';
   static const tokenSettingId = 'n8n_book_token_';
+  /// Reception and lead bookings: 3 visits per hour.
+  static const leadSlotMinutes = 20;
 
   /// ISO weekday 1=Mon … 7=Sun.
   final Map<int, DayHours?> week;
@@ -48,21 +89,21 @@ class ClinicHours {
   const ClinicHours({
     required this.week,
     this.utcOffsetMinutes = 330,
-    this.slotMinutes = 15,
+    this.slotMinutes = 20,
     this.defaultOperatorId = '',
     this.closedDates = const [],
   });
 
   static ClinicHours get indiaDefault {
-    const work = DayHours(
-      open: 600,
-      close: 1140,
-      breakStart: 810,
-      breakEnd: 870,
+    final work = DayHours.sessions(
+      morningOpen: 600,
+      morningClose: 840,
+      eveningOpen: 1020,
+      eveningClose: 1140,
     );
-    return const ClinicHours(
+    return ClinicHours(
       utcOffsetMinutes: 330,
-      slotMinutes: 15,
+      slotMinutes: 20,
       week: {
         1: work,
         2: work,
@@ -101,7 +142,7 @@ class ClinicHours {
     return ClinicHours(
       week: week,
       utcOffsetMinutes: (json['utcOffsetMinutes'] as num?)?.toInt() ?? 330,
-      slotMinutes: (json['slotMinutes'] as num?)?.toInt() ?? 15,
+      slotMinutes: (json['slotMinutes'] as num?)?.toInt() ?? 20,
       defaultOperatorId: json['defaultOperatorId']?.toString() ?? '',
       closedDates: List<String>.from(json['closedDates'] ?? const []),
     );
@@ -120,16 +161,98 @@ class ClinicHours {
 
   String toJsonString() => jsonEncode(toJson());
 
+  ClinicHours copyWith({
+    Map<int, DayHours?>? week,
+    int? utcOffsetMinutes,
+    int? slotMinutes,
+    String? defaultOperatorId,
+    List<String>? closedDates,
+  }) {
+    return ClinicHours(
+      week: week ?? this.week,
+      utcOffsetMinutes: utcOffsetMinutes ?? this.utcOffsetMinutes,
+      slotMinutes: slotMinutes ?? this.slotMinutes,
+      defaultOperatorId: defaultOperatorId ?? this.defaultOperatorId,
+      closedDates: closedDates ?? this.closedDates,
+    );
+  }
+
   bool isClosedDate(DateTime clinicLocalDate) {
     final key =
         '${clinicLocalDate.year.toString().padLeft(4, '0')}-${clinicLocalDate.month.toString().padLeft(2, '0')}-${clinicLocalDate.day.toString().padLeft(2, '0')}';
     return closedDates.contains(key);
   }
 
+  /// Slot start times (minutes from midnight) for a local calendar day.
+  List<int> slotStartsForLocalDate(DateTime localDate, {int? durationMinutes}) {
+    if (isClosedDate(localDate)) return const [];
+    return slotStartsForWeekday(localDate.weekday,
+        durationMinutes: durationMinutes);
+  }
+
+  List<int> slotStartsForWeekday(int weekday, {int? durationMinutes}) {
+    final day = week[weekday];
+    if (day == null) return const [];
+    final duration = durationMinutes ?? slotMinutes;
+    if (duration <= 0) return const [];
+    final starts = <int>[];
+    var cursor = day.open;
+    while (cursor + duration <= day.close) {
+      final inBreak = day.breakStart != null &&
+          day.breakEnd != null &&
+          cursor < day.breakEnd! &&
+          cursor + duration > day.breakStart!;
+      if (inBreak) {
+        cursor = day.breakEnd!;
+        continue;
+      }
+      starts.add(cursor);
+      cursor += duration;
+    }
+    return starts;
+  }
+
+  DateTime applyMinutes(DateTime date, int minutesFromMidnight) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      minutesFromMidnight ~/ 60,
+      minutesFromMidnight % 60,
+    );
+  }
+
+  /// Align [local] to a clinic slot on that day. Midnight (typical calendar
+  /// tap) uses the first slot. Otherwise the next slot at or after that time.
+  DateTime snapToSlot(DateTime local, {int? durationMinutes}) {
+    final starts =
+        slotStartsForLocalDate(local, durationMinutes: durationMinutes);
+    if (starts.isEmpty) return local;
+    final m = local.hour * 60 + local.minute;
+    if (m == 0) return applyMinutes(local, starts.first);
+    for (final s in starts) {
+      if (s >= m) return applyMinutes(local, s);
+    }
+    return applyMinutes(local, starts.last);
+  }
+
   static String formatMinutes(int minutes) {
     final h = (minutes ~/ 60).toString().padLeft(2, '0');
     final m = (minutes % 60).toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  static String formatClock(int minutesFromMidnight) {
+    var h = minutesFromMidnight ~/ 60;
+    final m = minutesFromMidnight % 60;
+    final am = h < 12;
+    final hour12 = h % 12 == 0 ? 12 : h % 12;
+    return '$hour12:${m.toString().padLeft(2, '0')} ${am ? 'AM' : 'PM'}';
+  }
+
+  static String formatHour(int hour) {
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '$hour12 ${hour < 12 ? 'AM' : 'PM'}';
   }
 
   static int? parseMinutes(String hhmm) {

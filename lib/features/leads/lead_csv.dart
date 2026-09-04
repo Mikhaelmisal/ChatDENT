@@ -97,6 +97,7 @@ String _normalizeStage(String raw) {
   }
   if (v.contains('contact')) return LeadStage.contacted;
   if (v.contains('interest')) return LeadStage.interested;
+  if (v.contains('resched')) return LeadStage.reschedule;
   if (v.contains('schedul') || v.contains('book')) {
     return LeadStage.scheduled;
   }

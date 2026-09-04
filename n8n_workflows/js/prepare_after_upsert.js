@@ -4,7 +4,10 @@ const groupJid =
   up.staffGroupJid || '120363426681576301@g.us';
 const optOut = inbound.optOut === true || up.optOut === true;
 const shouldReply = up.shouldReply !== false && !optOut;
-const sendWelcome = shouldReply && up.isNewLead === true && !!(up.welcomeText || '').trim();
+const sendWelcome =
+  up.sendWelcome === true &&
+  !optOut &&
+  !!(up.welcomeText || '').trim();
 return [{
   json: Object.assign({}, inbound, {
     shouldReply: shouldReply,
