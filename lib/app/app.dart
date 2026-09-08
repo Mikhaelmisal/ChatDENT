@@ -18,6 +18,7 @@ import 'package:chatdent/features/login/login_screen.dart';
 import 'package:chatdent/common_widgets/current_account.dart';
 import 'package:chatdent/common_widgets/logo.dart';
 import 'package:chatdent/services/patient_side.dart';
+import 'package:chatdent/services/notifications/static_notifications.dart';
 import 'package:chatdent/services/version.dart';
 import 'package:chatdent/services/changelog.dart';
 import 'package:chatdent/utils/flyout_focus_fix.dart';
@@ -123,13 +124,19 @@ class ChatDENTApp extends StatelessWidget {
       }
     }
 
-    // Show new version dialog only on macOS — all other platforms
-    // (MS Store, Play Store, App Store) handle updates automatically.
+    // Show new version dialog on sideloaded Windows / Android / macOS.
     if (version.needsUpdateNotification &&
         version.isOutdated() &&
         !launch.dialogShown() &&
         bContext.mounted) {
       launch.dialogShown(true);
+
+      await staticNotifications.dingANotification(
+        title: txt("newVersionDialogTitle"),
+        body:
+            "${txt("newVersionDialogContent")} (${version.current()} → ${version.latestVersion()})",
+        icon: WindowsIcons.download,
+      );
 
       showDialog(
         barrierDismissible: true,

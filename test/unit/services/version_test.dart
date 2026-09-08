@@ -8,6 +8,7 @@ void main() {
         'latest_version': '2.0.0',
         'changelog': ['Fix bug', 'Add feature'],
         'downloads': {
+          'windows': 'https://win.example.com',
           'ms_store': 'https://store.example.com',
           'macos': 'https://mac.example.com',
           'ios': 'https://ios.example.com',
@@ -20,6 +21,7 @@ void main() {
 
       expect(meta.latestVersion, '2.0.0');
       expect(meta.changelog, ['Fix bug', 'Add feature']);
+      expect(meta.windowsUrl, 'https://win.example.com');
       expect(meta.msStoreUrl, 'https://store.example.com');
       expect(meta.macosUrl, 'https://mac.example.com');
       expect(meta.iosUrl, 'https://ios.example.com');
@@ -37,8 +39,8 @@ void main() {
 
       expect(meta.latestVersion, '1.0.0');
       expect(meta.changelog, isEmpty);
+      expect(meta.windowsUrl, isEmpty);
       expect(meta.msStoreUrl, isEmpty);
-      expect(meta.macosUrl, isEmpty);
       expect(meta.iosUrl, isEmpty);
       expect(meta.androidUrl, isEmpty);
       expect(meta.webUrl, isEmpty);
@@ -92,61 +94,39 @@ void main() {
 
   group('_isVersionNewer', () {
     test('2.0.0 > 1.9.9', () {
-      final result = _versionIsNewer('2.0.0', '1.9.9');
+      final result = isVersionNewer('2.0.0', '1.9.9');
       expect(result, true);
     });
 
     test('1.0.0 == 1.0.0', () {
-      final result = _versionIsNewer('1.0.0', '1.0.0');
+      final result = isVersionNewer('1.0.0', '1.0.0');
       expect(result, false);
     });
 
     test('1.0.1 > 1.0.0', () {
-      final result = _versionIsNewer('1.0.1', '1.0.0');
+      final result = isVersionNewer('1.0.1', '1.0.0');
       expect(result, true);
     });
 
     test('1.0.0 < 1.0.1', () {
-      final result = _versionIsNewer('1.0.0', '1.0.1');
+      final result = isVersionNewer('1.0.0', '1.0.1');
       expect(result, false);
     });
 
     test('handles versions without patch', () {
       // 1.0 should be treated as 1.0.0
-      final result = _versionIsNewer('1.0', '0.9.9');
+      final result = isVersionNewer('1.0', '0.9.9');
       expect(result, true);
     });
 
     test('handles single digit versions', () {
-      final result = _versionIsNewer('2', '1');
+      final result = isVersionNewer('2', '1');
       expect(result, true);
     });
 
     test('10.0.0 > 9.9.9', () {
-      final result = _versionIsNewer('10.0.0', '9.9.9');
+      final result = isVersionNewer('10.0.0', '9.9.9');
       expect(result, true);
     });
   });
-}
-
-/// Replicates the private _isVersionNewer logic for testing.
-bool _versionIsNewer(String latest, String current) {
-  final latestParts =
-      latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-  final currentParts =
-      current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-
-  // Pad to at least 3 parts
-  while (latestParts.length < 3) {
-    latestParts.add(0);
-  }
-  while (currentParts.length < 3) {
-    currentParts.add(0);
-  }
-
-  for (int i = 0; i < 3; i++) {
-    if (latestParts[i] > currentParts[i]) return true;
-    if (latestParts[i] < currentParts[i]) return false;
-  }
-  return false;
 }

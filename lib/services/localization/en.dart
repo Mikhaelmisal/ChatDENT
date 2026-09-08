@@ -833,7 +833,7 @@ class En {
         "ChatDENT is installed. Open Settings to set clinic hours, the primary phone, Evolution WhatsApp, and templates. The install steps are in README.md and manual.md in this project.",
     "newVersionDialogTitle": "New version available",
     "newVersionDialogContent":
-        "A new version of ChatDENT is available. Please update to the latest version to get the best experience. Scan the QR code below to get started.",
+        "A newer ChatDENT is ready. On Windows, replace the app folder with the new pack. On Android, install the new APK over the current one.",
     "changelogDialogTitle": "What's New in",
 
     // login required

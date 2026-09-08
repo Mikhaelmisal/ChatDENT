@@ -27,18 +27,21 @@ class NewVersionDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Txt(txt("newVersionDialogContent")),
-          const SizedBox(height: 10),
-          QRLink(link: downloadLink),
+          if (downloadLink.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            QRLink(link: downloadLink),
+          ],
         ],
       ),
       style: dialogStyling(context, false),
       actions: [
-        FilledButton(
-          child: ButtonContent(WindowsIcons.download, txt("download")),
-          onPressed: () {
-            launchUrl(Uri.parse(downloadLink));
-          },
-        ),
+        if (downloadLink.isNotEmpty)
+          FilledButton(
+            child: ButtonContent(WindowsIcons.download, txt("download")),
+            onPressed: () {
+              launchUrl(Uri.parse(downloadLink));
+            },
+          ),
         const CloseButtonInDialog(buttonText: "close"),
       ],
     );

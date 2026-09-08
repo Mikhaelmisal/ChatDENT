@@ -1,0 +1,14 @@
+{
+  "latest_version": "0.10.5",
+  "changelog": [
+    "Dental notes lists, operative steps, and delete sync across devices."
+  ],
+  "downloads": {
+    "windows": "https://github.com/Mikhaelmisal/ChatDENT/releases/latest",
+    "android": "https://github.com/Mikhaelmisal/ChatDENT/releases/latest",
+    "ms_store": "",
+    "macos": "",
+    "ios": "",
+    "web": ""
+  }
+}
