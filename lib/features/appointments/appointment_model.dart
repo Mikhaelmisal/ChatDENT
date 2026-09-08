@@ -1,6 +1,7 @@
 import 'package:chatdent/core/model.dart';
 import 'package:chatdent/features/accounts/accounts_controller.dart';
 import 'package:chatdent/services/launch.dart';
+import 'package:chatdent/features/appointments/procedure_protocols.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/services/localization/locale.dart';
@@ -133,6 +134,7 @@ class Appointment extends Model {
   /* 10 */ bool isDone = false;
   /* 11 */ Map<String, String> teeth = {};
   /* 11b */ Map<String, String> teethExtraNotes = {};
+  /* 11c */ Map<String, ToothProcedureProgress> procedureProgress = {};
   /* 12 */ bool hasLabwork = false;
   /* 13 */ String labName = "";
   /* 14 */ String labworkNotes = "";
@@ -178,6 +180,17 @@ class Appointment extends Model {
     /* 11 */ teeth = Map<String, String>.from(json['teeth'] ?? teeth);
     /* 11b */ teethExtraNotes =
         Map<String, String>.from(json['teethExtraNotes'] ?? teethExtraNotes);
+    /* 11c */ procedureProgress = {};
+    final rawProgress = json['procedureProgress'];
+    if (rawProgress is Map) {
+      rawProgress.forEach((key, value) {
+        if (value is Map) {
+          procedureProgress[key.toString()] = ToothProcedureProgress.fromJson(
+            Map<String, dynamic>.from(value),
+          );
+        }
+      });
+    }
     /* 12 */ hasLabwork = json["hasLabwork"] ?? hasLabwork;
     /* 13 */ labName = json["labName"] ?? labName;
     /* 14 */ labworkNotes = json["labworkNotes"] ?? labworkNotes;
@@ -221,6 +234,11 @@ class Appointment extends Model {
     /* 11 */ if (teeth.isNotEmpty) json['teeth'] = teeth;
     /* 11b */ if (teethExtraNotes.isNotEmpty)
       json['teethExtraNotes'] = teethExtraNotes;
+    /* 11c */ if (procedureProgress.isNotEmpty) {
+      json['procedureProgress'] = {
+        for (final e in procedureProgress.entries) e.key: e.value.toJson(),
+      };
+    }
     /* 12 */ if (hasLabwork != d.hasLabwork) json['hasLabwork'] = hasLabwork;
     /* 13 */ if (labName != d.labName) json['labName'] = labName;
     /* 14 */ if (labworkNotes != d.labworkNotes) {

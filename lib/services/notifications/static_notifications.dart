@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:chatdent/app/app.dart';
 import 'package:chatdent/app/routes.dart';
+import 'package:chatdent/core/observable.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/dashboard/dashboard_controller.dart';
 import 'package:chatdent/features/labwork/labworks_ctrl.dart';
@@ -75,9 +76,26 @@ class _NotificationsService {
   }
 
   final List<StaticNotification> _notifications = [];
+  final Set<String> _dismissed = {};
+  final revision = ObservableState(0);
+
+  void _changed() => revision(revision() + 1);
 
   void addNotification(StaticNotification notification) {
     _notifications.add(notification);
+    _changed();
+  }
+
+  void clearAll() {
+    _notifications.clear();
+    _dismissed.addAll({
+      'todayAppointments',
+      'dueLabworks',
+      'notDeliveredLabworks',
+      'incomingPendingNotes',
+      'outgoingPendingNotes',
+    });
+    _changed();
   }
 
   Future<void> dingANotification({
@@ -122,7 +140,8 @@ class _NotificationsService {
 
   List<StaticNotification> get notifications {
     return [
-      if (todayAppointmentsForYou.isNotEmpty)
+      if (!_dismissed.contains('todayAppointments') &&
+          todayAppointmentsForYou.isNotEmpty)
         StaticNotification(
           icon: FluentIcons.goto_today,
           title: txt("appointmentsToday"),
@@ -137,7 +156,7 @@ class _NotificationsService {
             )
           ],
         ),
-      if (dueLabworks.isNotEmpty)
+      if (!_dismissed.contains('dueLabworks') && dueLabworks.isNotEmpty)
         StaticNotification(
           icon: FluentIcons.manufacturing,
           title: txt("dueLabworks"),
@@ -150,7 +169,8 @@ class _NotificationsService {
                 hideOnRoute: "labworks")
           ],
         ),
-      if (notDeliveredLabworks.isNotEmpty)
+      if (!_dismissed.contains('notDeliveredLabworks') &&
+          notDeliveredLabworks.isNotEmpty)
         StaticNotification(
           icon: FluentIcons.manufacturing,
           title: txt("undeliveredLabworks"),
@@ -164,7 +184,8 @@ class _NotificationsService {
                 hideOnRoute: "labworks")
           ],
         ),
-      if (incomingPendingNotes.isNotEmpty)
+      if (!_dismissed.contains('incomingPendingNotes') &&
+          incomingPendingNotes.isNotEmpty)
         StaticNotification(
           icon: WindowsIcons.reply,
           title: txt("incomingNotes"),
@@ -178,7 +199,8 @@ class _NotificationsService {
                 hideOnRoute: "notes")
           ],
         ),
-      if (outgoingPendingNotes.isNotEmpty)
+      if (!_dismissed.contains('outgoingPendingNotes') &&
+          outgoingPendingNotes.isNotEmpty)
         StaticNotification(
           icon: WindowsIcons.reply_mirrored,
           title: txt("outgoingNotes"),

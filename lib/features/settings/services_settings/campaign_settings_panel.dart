@@ -1,6 +1,6 @@
 import 'package:chatdent/common_widgets/button_styles.dart';
 import 'package:chatdent/features/leads/clinic_hours.dart';
-import 'package:chatdent/features/outreach/campaign_settings.dart';
+import 'package:chatdent/features/leads/campaign_settings.dart';
 import 'package:chatdent/features/settings/applies_to_indicator.dart';
 import 'package:chatdent/features/settings/settings_model.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';

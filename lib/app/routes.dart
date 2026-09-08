@@ -10,11 +10,9 @@ import 'package:chatdent/features/expenses/expenses_screen.dart';
 import 'package:chatdent/features/labwork/labworks_screen.dart';
 import 'package:chatdent/features/leads/leads_screen.dart';
 import 'package:chatdent/features/leads/leads_store.dart';
-import 'package:chatdent/features/outreach/outreach_screen.dart';
 import 'package:chatdent/features/notes/notes_screen.dart';
 import 'package:chatdent/features/notes/notes_store.dart';
 import 'package:chatdent/features/patients/patients_screen.dart';
-import 'package:chatdent/features/prescriptions/prescriptions_screen.dart';
 import 'package:chatdent/features/stats/screen_stats.dart';
 import 'package:chatdent/features/accounts/accounts_screen.dart';
 import 'package:chatdent/services/backups.dart';
@@ -197,6 +195,23 @@ class _Routes {
               appointments.synchronize();
             },
           ),
+        if (login.perm(Perm.appointments).some || login.isAdmin)
+          Route(
+            title: txt("appointments"),
+            identifier: "calendar",
+            navbarTitle: txt("appointments"),
+            icon: FluentIcons.calendar,
+            screen: CalendarScreen.new,
+            accessible: login.perm(Perm.appointments).some || login.isAdmin,
+            onSelect: () async {
+              if (login.perm(Perm.appointments).not(2)) {
+                appointments.filterByOperatorID(login.currentAccountID);
+              }
+              await accounts.reloadFromRemote();
+              await patients.synchronize();
+              appointments.synchronize();
+            },
+          ),
         if (login.perm(Perm.leads).some || login.isAdmin)
           Route(
             title: txt("leads"),
@@ -208,37 +223,6 @@ class _Routes {
             onSelect: () async {
               await accounts.reloadFromRemote();
               await leads.synchronize();
-              await patients.synchronize();
-              appointments.synchronize();
-            },
-          ),
-        if (login.perm(Perm.leads).some || login.isAdmin)
-          Route(
-            title: txt("outreachDashboard"),
-            identifier: "outreach",
-            navbarTitle: txt("outreachDashboard"),
-            icon: FluentIcons.megaphone,
-            screen: OutreachScreen.new,
-            accessible: login.perm(Perm.leads).some || login.isAdmin,
-            onSelect: () async {
-              await leads.synchronize();
-              await patients.synchronize();
-              appointments.synchronize();
-            },
-          ),
-        if (login.perm(Perm.appointments).some || login.isAdmin)
-          Route(
-            title: txt("appointments"),
-            identifier: "calendar",
-            navbarTitle: txt("calendar"),
-            icon: FluentIcons.calendar,
-            screen: CalendarScreen.new,
-            accessible: login.perm(Perm.appointments).some || login.isAdmin,
-            onSelect: () async {
-              if (login.perm(Perm.appointments).not(2)) {
-                appointments.filterByOperatorID(login.currentAccountID);
-              }
-              await accounts.reloadFromRemote();
               await patients.synchronize();
               appointments.synchronize();
             },
@@ -255,18 +239,6 @@ class _Routes {
               await accounts.reloadFromRemote();
               await patients.synchronize();
               await appointments.synchronize();
-            },
-          ),
-        if (login.perm(Perm.appointments).some || login.isAdmin)
-          Route(
-            title: txt("prescriptions"),
-            identifier: "prescriptions",
-            navbarTitle: txt("prescriptions"),
-            icon: FluentIcons.pill,
-            screen: PrescriptionsScreen.new,
-            accessible: login.perm(Perm.appointments).some || login.isAdmin,
-            onSelect: () async {
-              await globalSettings.synchronize();
             },
           ),
         Route(

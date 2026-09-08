@@ -8,6 +8,7 @@ import 'package:chatdent/common_widgets/transitions/rotate.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/services/launch.dart';
 import 'package:chatdent/services/network.dart';
+import 'package:chatdent/services/notifications/static_notifications.dart';
 import 'package:chatdent/services/whatsapp_status.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -28,6 +29,7 @@ class NetworkActions extends StatelessWidget {
             networkActions.hasErrors.stream,
             networkActions.errorPulse.stream,
             whatsappStatus.link.stream,
+            staticNotifications.revision.stream,
           ],
           builder: (context, _) {
             return Row(

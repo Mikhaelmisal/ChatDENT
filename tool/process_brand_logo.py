@@ -58,8 +58,24 @@ def save_png(im: Image.Image, path: Path) -> None:
     print("wrote", path)
 
 
-def flatten_on_chrome(im: Image.Image, size: int) -> Image.Image:
-    tooth = resize(im.convert("RGBA"), size)
+def scale_on_canvas(im: Image.Image, size: int, scale: float) -> Image.Image:
+    """Center the mark at `scale` of the canvas (0.8 = 20% smaller)."""
+    inner = max(1, int(round(size * scale)))
+    tooth = resize(im.convert("RGBA"), inner)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    off = (size - inner) // 2
+    canvas.alpha_composite(tooth, (off, off))
+    return canvas
+
+
+def flatten_on_chrome(
+    im: Image.Image, size: int, scale: float = 1.0
+) -> Image.Image:
+    tooth = (
+        scale_on_canvas(im, size, scale)
+        if scale < 1
+        else resize(im.convert("RGBA"), size)
+    )
     canvas = Image.new("RGBA", (size, size), _CHROME)
     canvas.alpha_composite(tooth)
     return canvas.convert("RGB")
@@ -74,10 +90,13 @@ def main() -> None:
         print("kept", SRC)
 
     # Same pixels everywhere — only the canvas size changes.
+    # White speech bubble stays opaque; do not invert it for Android.
     save_png(resize(mark, 1024), ROOT / "assets/app_icon.png")
+    save_png(resize(mark, 1024), ROOT / "assets/images/logo_transparent.png")
     save_png(resize(mark, 512), ROOT / "assets/app_icon_desktop.png")
-    save_png(resize(mark, 1024), ROOT / "assets/app_icon_foreground.png")
-    save_png(flatten_on_chrome(mark, 1024), ROOT / "assets/app_icon_android.png")
+    # Android launcher: 25% smaller so the tooth sits inside the round mask.
+    save_png(scale_on_canvas(mark, 1024, 0.75), ROOT / "assets/app_icon_foreground.png")
+    save_png(flatten_on_chrome(mark, 1024, 0.75), ROOT / "assets/app_icon_android.png")
     save_png(flatten_on_chrome(mark, 1024), ROOT / "assets/app_icon_ios.png")
     save_png(resize(mark, 256), ROOT / "docs/logo.png")
 
@@ -87,12 +106,7 @@ def main() -> None:
     save_png(flatten_on_chrome(mark, 192), ROOT / "web/icons/Icon-maskable-192.png")
     save_png(flatten_on_chrome(mark, 512), ROOT / "web/icons/Icon-maskable-512.png")
 
-    ico_path = ROOT / "windows/runner/resources/app_icon.ico"
-    resize(mark, 256).save(
-        ico_path,
-        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
-    )
-    print("wrote", ico_path)
+    # Do not overwrite windows/runner/resources/app_icon.ico — that icon is frozen.
 
 
 if __name__ == "__main__":

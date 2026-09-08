@@ -4,7 +4,7 @@ import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
 import 'package:chatdent/features/leads/clinic_hours.dart';
 import 'package:chatdent/features/leads/whatsapp_templates.dart';
-import 'package:chatdent/features/outreach/campaign_settings.dart';
+import 'package:chatdent/features/leads/campaign_settings.dart';
 import 'package:chatdent/features/patients/patient_model.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
 import 'package:chatdent/features/prescriptions/prescription_line.dart';

@@ -42,7 +42,7 @@ final List<TxOption> txOptions = [
   TxOption('fractured', DentalIcons.fractured, ColorsDictionary.c05, StateType.state),
   TxOption('re-RCT', DentalIcons.rerct, ColorsDictionary.c05, StateType.treatment),
   TxOption('mobility', DentalIcons.mobility, ColorsDictionary.c10, StateType.state),
-  TxOption('ortho', DentalIcons.ortho, ColorsDictionary.c10, StateType.treatment),
+  TxOption('ortho', DentalIcons.ortho, ColorsDictionary.c10, StateType.both),
   TxOption('recession', DentalIcons.recession, ColorsDictionary.c06, StateType.state),
   TxOption('whitening', DentalIcons.whiten, ColorsDictionary.c06, StateType.treatment),
   TxOption('rroot', DentalIcons.retainedroot, ColorsDictionary.c07, StateType.state),

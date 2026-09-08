@@ -375,7 +375,9 @@ class _PanelScreenState extends State<PanelScreen> {
           shortcutsEnabled: true,
           tabWidthBehavior: widget.panel.showTitles
               ? TabWidthBehavior.equal
-              : TabWidthBehavior.compact,
+              : (widget.layoutWidth < 710
+                  ? TabWidthBehavior.sizeToContent
+                  : TabWidthBehavior.compact),
           header: widget.panel.selectedTab() != 0
               ? IconButton(
                   icon: Icon(Directionality.of(context) == TextDirection.rtl
@@ -400,7 +402,7 @@ class _PanelScreenState extends State<PanelScreen> {
               : const SizedBox(width: 25),
           tabs: widget.panel.tabs
               .map((e) => Tab(
-                    text: Txt(txt(e.title)),
+                    text: Txt(e.title),
                     icon: Icon(e.icon),
                     body: const SizedBox(),
                     disabled: e.onlyIfSaved && isNew,

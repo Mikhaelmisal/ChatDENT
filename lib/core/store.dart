@@ -289,6 +289,11 @@ class Store<G extends Model> {
       int conflicts = 0;
 
       if (localVersion == remoteVersion && deferred.isEmpty) {
+        final dropped = await _dropOrphanedLocalRows();
+        if (dropped > 0) {
+          await reload();
+          return SyncResult(pulled: dropped, pushed: 0, conflicts: 0);
+        }
         return SyncResult(exception: "nothing to sync");
       }
 
@@ -364,6 +369,12 @@ class Store<G extends Model> {
         final localJson =
             jsonDecode(await local!.get(c.dfID)) as Map<String, dynamic>;
         final remoteJson = jsonDecode(c.remoteData) as Map<String, dynamic>;
+        if (jsonMarksDeleted(remoteJson)) {
+          await local!.removeKeys([c.dfID]);
+          observableMap.remove(c.dfID);
+          archived.remove(c.dfID);
+          continue;
+        }
         final serverFiles = remote!.fullNamesCache[c.dfID] ?? const <String>[];
         final pendingUploads = filenamesFromDeferredForRow(deferred, c.dfID)
             .where((f) => f.isNotEmpty)
@@ -396,6 +407,24 @@ class Store<G extends Model> {
       // remote-only row of the same ID, but conflicting IDs were already
       // removed from remoteUpdates above via remoteLosersIndices).
       toLocalWrite.addAll(mergedConflictsToLocal);
+
+      final tombstonedIds = <String>[];
+      toLocalWrite.removeWhere((id, data) {
+        try {
+          if (jsonMarksDeleted(jsonDecode(data))) {
+            tombstonedIds.add(id);
+            return true;
+          }
+        } catch (_) {}
+        return false;
+      });
+      if (tombstonedIds.isNotEmpty) {
+        await local!.removeKeys(tombstonedIds);
+        for (final id in tombstonedIds) {
+          observableMap.remove(id);
+          archived.remove(id);
+        }
+      }
 
       // those will be built in the for loop below
       Map<String, String> toRemoteWrite = {};
@@ -509,10 +538,14 @@ class Store<G extends Model> {
           final deleteId = entry.key.substring('DELETE||'.length);
           fileHandling.add(() async {
             try {
-              await remote!.deleteIds([deleteId]);
+              await remote!.put([
+                RowToWriteRemotely(
+                  id: deleteId,
+                  data: jsonEncode(deletionTombstone(deleteId)),
+                ),
+              ]);
               succeededFileKeys.add(entry.key);
             } catch (e, s) {
-              // Still clear the queue if the server already has no such row.
               if (e is ClientException && SaveRemote.isAlreadyGone(e)) {
                 succeededFileKeys.add(entry.key);
                 return;
@@ -646,6 +679,7 @@ class Store<G extends Model> {
         }
       }
 
+      await _dropOrphanedLocalRows();
       await reload();
 
       return SyncResult(
@@ -658,6 +692,45 @@ class Store<G extends Model> {
       logger("Error during synchronization: $e", s);
       return SyncResult(exception: e.toString());
     }
+  }
+
+  /// Remove local Hive rows that no longer exist on the server.
+  ///
+  /// Permanent delete on another device removes (or tombstones) the PocketBase
+  /// row without changing the latest `updated` time of leftover records, so
+  /// incremental [getSince] never tells this device to drop them.
+  /// Rows still queued in deferred (unsynced local creates) are kept.
+  Future<int> _dropOrphanedLocalRows() async {
+    if (local == null || remote == null) return 0;
+    Set<String> remoteIds;
+    try {
+      remoteIds = await remote!.listIds();
+    } catch (e, s) {
+      logger('Orphan reconcile skipped (could not list remote ids): $e', s, 2);
+      return 0;
+    }
+    final deferred = await local!.getDeferred();
+    final deferredDocIds = deferred.keys
+        .where((k) => !k.contains('||'))
+        .toSet();
+    final pendingDeletes = deferred.keys
+        .where((k) => k.startsWith('DELETE||'))
+        .map((k) => k.substring('DELETE||'.length))
+        .toSet();
+    final localAll = await local!.getAll();
+    final orphans = localAll.keys
+        .where((id) =>
+            !remoteIds.contains(id) &&
+            !deferredDocIds.contains(id) &&
+            !pendingDeletes.contains(id))
+        .toList();
+    if (orphans.isEmpty) return 0;
+    await local!.removeKeys(orphans);
+    for (final id in orphans) {
+      observableMap.remove(id);
+      archived.remove(id);
+    }
+    return orphans.length;
   }
 
   // the following logic is for the task management of synchronization
@@ -900,7 +973,12 @@ class Store<G extends Model> {
 
     if (remote != null && remote!.isOnline) {
       try {
-        await remote!.deleteIds([id]);
+        await remote!.put([
+          RowToWriteRemotely(
+            id: id,
+            data: jsonEncode(deletionTombstone(id)),
+          ),
+        ]);
         deferred = await local!.getDeferred();
         deferred.remove(deleteKey);
         await local!.putDeferred(deferred);
@@ -1438,8 +1516,15 @@ class _ConflictInfo {
 }
 
 Map<String, Map<String, dynamic>> _decodeAllDocs(Map<String, String> encoded) {
-  return Map<String, Map<String, dynamic>>.fromEntries(encoded.entries.map(
-      (entry) => MapEntry(
+  return Map<String, Map<String, dynamic>>.fromEntries(encoded.entries
+      .where((entry) {
+        try {
+          return !jsonMarksDeleted(jsonDecode(entry.value));
+        } catch (_) {
+          return true;
+        }
+      })
+      .map((entry) => MapEntry(
           entry.key, jsonDecode(entry.value) as Map<String, dynamic>)));
 }
 

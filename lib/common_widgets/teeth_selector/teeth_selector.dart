@@ -2,6 +2,7 @@ import 'package:chatdent/common_widgets/live_transcribing_textfield.dart';
 import 'package:chatdent/common_widgets/notation.dart';
 import 'package:chatdent/common_widgets/teeth_selector/svg.dart';
 import 'package:chatdent/common_widgets/teeth_selector/tooth_state_wheel.dart';
+import 'package:chatdent/common_widgets/teeth_selector/tx_extra_notes.dart';
 import 'package:chatdent/common_widgets/teeth_selector/tx_options.dart';
 import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/utils/flyout_focus_fix.dart';
@@ -76,6 +77,21 @@ class _TeethSelectorState extends State<TeethSelector> {
             iso.startsWith("7") ||
             iso.startsWith("8"));
     super.initState();
+  }
+
+  void _applyDefaultExtraNote(String iso, String? label) {
+    if (label == null) {
+      _extraNotes.remove(iso);
+      widget.onExtraNote?.call(iso, '');
+      return;
+    }
+    if (label == 'other') return;
+    final choices = extraNoteChoicesFor(label);
+    if (choices.isEmpty) return;
+    final current = _extraNotes[iso] ?? '';
+    if (choices.contains(current)) return;
+    _extraNotes[iso] = choices.first;
+    widget.onExtraNote?.call(iso, choices.first);
   }
 
   @override
@@ -161,6 +177,9 @@ class _TeethSelectorState extends State<TeethSelector> {
                         onNote: (iso, tooth) {
                           setState(() {
                             widget.onNote(iso, tooth);
+                            if (widget.type == StateType.state) {
+                              _applyDefaultExtraNote(iso, tooth);
+                            }
                           });
                         },
                         currentNote: widget.currentNotes[tKey],
@@ -183,7 +202,8 @@ class _TeethSelectorState extends State<TeethSelector> {
             ),
           ],
         ),
-        if (widget.currentNotes.isNotEmpty) ...[
+        if (widget.type == StateType.state &&
+            widget.currentNotes.isNotEmpty) ...[
           const SizedBox(height: 10),
           _ExtraNotesSection(
             currentNotes: widget.currentNotes,
@@ -450,6 +470,7 @@ class _ExtraNotesSection extends StatefulWidget {
 
 class _ExtraNotesSectionState extends State<_ExtraNotesSection> {
   final Map<String, TextEditingController> _controllers = {};
+  final Set<String> _writingOwn = {};
 
   @override
   void initState() {
@@ -520,7 +541,7 @@ class _ExtraNotesSectionState extends State<_ExtraNotesSection> {
         final ctrl = _controllers[iso];
 
         return SizedBox(
-          width: 280,
+          width: 340,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -548,14 +569,88 @@ class _ExtraNotesSectionState extends State<_ExtraNotesSection> {
                 ],
               ),
               const SizedBox(height: 4),
-              SizedBox(
-                child: LiveTranscribingTextField(
+              if (isOther)
+                LiveTranscribingTextField(
                   controller: ctrl,
                   placeholder: txt("extraInfoPlaceholder"),
                   maxLines: null,
                   style: FluentTheme.of(context).typography.caption,
+                )
+              else
+                Builder(
+                  builder: (context) {
+                    final choices = extraNoteChoicesFor(note);
+                    final extra = widget.extraNotes[iso] ?? '';
+                    final writingOwn = _writingOwn.contains(iso) ||
+                        (extra.isNotEmpty && !choices.contains(extra));
+                    final caption = FluentTheme.of(context).typography.caption!;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Txt(
+                            txt("selectToothDetail"),
+                            style: caption.copyWith(
+                              color: FluentTheme.of(context).inactiveColor,
+                            ),
+                          ),
+                        ),
+                        ...choices.map((choice) {
+                          final selected = !writingOwn && extra == choice;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: RadioButton(
+                              checked: selected,
+                              onChanged: (_) {
+                                setState(() => _writingOwn.remove(iso));
+                                widget.onExtraNote(iso, choice);
+                              },
+                              content: Text(
+                                choice,
+                                softWrap: true,
+                                style: caption.copyWith(
+                                  height: 1.4,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: RadioButton(
+                            checked: writingOwn,
+                            onChanged: (_) {
+                              setState(() => _writingOwn.add(iso));
+                              if (choices.contains(extra)) {
+                                widget.onExtraNote(iso, '');
+                              }
+                            },
+                            content: Text(
+                              txt("other"),
+                              style: caption.copyWith(
+                                height: 1.4,
+                                fontWeight: writingOwn
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (writingOwn)
+                          LiveTranscribingTextField(
+                            controller: ctrl,
+                            placeholder: txt("extraInfoPlaceholder"),
+                            maxLines: null,
+                            style: caption.copyWith(height: 1.4),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-              ),
             ],
           ),
         );

@@ -1,5 +1,5 @@
+import 'package:chatdent/features/leads/campaign_settings.dart';
 import 'package:chatdent/features/leads/whatsapp_templates.dart';
-import 'package:chatdent/features/outreach/campaign_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

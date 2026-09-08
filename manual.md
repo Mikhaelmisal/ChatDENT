@@ -413,8 +413,7 @@ WhatsApp is handled by Evolution + n8n. ChatDENT never books a slot by itself an
 
 | Screen | Use |
 |--------|-----|
-| **Leads** | New and returning WhatsApp contacts. Queue a campaign image/text to selected rows. **Campaign messages** here are only extra marketing copy, not the official templates. |
-| **WhatsApp desk** | Birthdays, Google review follow-up, reschedule requests, interested leads (staff call to confirm). |
+| **Leads** | New and returning WhatsApp contacts. Filter by stage (including interested / reschedule). Queue a campaign image/text to selected rows. **Campaign messages** here are only extra marketing copy, not the official templates. Birthday messages go out at 09:00 clinic time via n8n; Google reviews are sent from the patient card. |
 | **Settings → WhatsApp templates** | Welcome, confirmation, reminder, birthday, review, staff-group alerts, opt-out. |
 | **Settings → Evolution WhatsApp** | Clinic instance, Maps, staff group, extra marketing instances 1–4, primary clinic phone. |
 | **Settings → WhatsApp campaign** | Review URL, flyer, quiet hours, treatments the AI may name (no fees). |
@@ -436,6 +435,7 @@ The **Settings** screen contains all configurable options for the application. E
 | **Currency** | 🌐 Whole clinic | Currency code used for all prices and payments |
 | **Country code** | 🌐 Whole clinic | ISO country code used for phone number validation |
 | **Prescription footer** | 🌐 Whole clinic | Text appended to the bottom of every printed prescription |
+| **Prescriptions** | 🌐 Whole clinic | Medicine catalog used when writing prescriptions on a visit (admin expander). |
 | **Phone number** | 🌐 Whole clinic | Number patients call for appointments. Used as `{phone}` in WhatsApp templates. |
 | **Language** | 📱 Your device only | Interface language — does not sync to other devices |
 | **Starting day of week** | 🌐 Whole clinic | First day shown on the calendar (Monday, Sunday, etc.) |

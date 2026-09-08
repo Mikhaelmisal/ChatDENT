@@ -38,6 +38,8 @@ import 'package:chatdent/common_widgets/operators_picker.dart';
 import 'package:chatdent/common_widgets/patient_picker.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
+import 'package:chatdent/features/appointments/procedure_protocols.dart';
+import 'package:chatdent/features/appointments/procedure_steps_tracker.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
 import 'package:chatdent/utils/uuid.dart';
 import 'package:chatdent/widget_keys.dart';
@@ -597,6 +599,10 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
     super.initState();
     _fillControllers();
     if (widget.appointment.paid != 0) didNotEditPaidYet = false;
+    syncAppointmentProcedureProgress(
+      widget.appointment.teeth,
+      widget.appointment.procedureProgress,
+    );
     transcriptionEditCounter.observe(_updateWhenTranscriptionOccurs);
   }
 
@@ -653,12 +659,19 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
                     })),
                     type: StateType.treatment,
                     onNote: (x, y) {
-                      if (y != null) {
-                        widget.appointment.teeth[x] = y;
-                      } else {
-                        widget.appointment.teeth.remove(x);
-                        widget.appointment.teethExtraNotes.remove(x);
-                      }
+                      setState(() {
+                        if (y != null) {
+                          widget.appointment.teeth[x] = y;
+                        } else {
+                          widget.appointment.teeth.remove(x);
+                          widget.appointment.teethExtraNotes.remove(x);
+                          widget.appointment.procedureProgress.remove(x);
+                        }
+                        syncAppointmentProcedureProgress(
+                          widget.appointment.teeth,
+                          widget.appointment.procedureProgress,
+                        );
+                      });
                     },
                     onExtraNote: (x, extra) {
                       widget.appointment.teethExtraNotes[x] = extra;
@@ -689,6 +702,19 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
               ),
             ),
           ),
+        const SizedBox(height: 10),
+        InfoLabel(
+          label: "${txt("procedureTracking")}:",
+          child: Container(
+            width: double.infinity,
+            decoration: chatDentInnerCard(ChatDentPalette.of(context)),
+            padding: const EdgeInsets.all(12),
+            child: ProcedureStepsTracker(
+              appointment: widget.appointment,
+              onChanged: () => setState(() {}),
+            ),
+          ),
+        ),
         Column(
           spacing: 5,
           crossAxisAlignment: CrossAxisAlignment.end,

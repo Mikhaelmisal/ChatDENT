@@ -134,49 +134,55 @@ class _LabworksTableState extends State<LabworksTable> {
         _buildCommandBar(),
         Padding(
           padding: const EdgeInsets.all(8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [_buildSearch(), _buildShowingToggle()],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TopSearch(controller: searchController, setState: setState),
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _buildShowingToggle(),
+              ),
+            ],
           ),
         ),
-        filteredAndSorted.isEmpty
-            ? const NoItemsFound()
-            : _buildInnerTable(context),
+        Expanded(
+          child: filteredAndSorted.isEmpty
+              ? const NoItemsFound()
+              : _buildInnerTable(context),
+        ),
       ],
     );
   }
 
-  Expanded _buildInnerTable(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildTable(context),
-          ShowMoreBar(
-            scrollController: _scrollController,
-            callBack: () {
-              setState(() {
-                slice = slice + 10;
-              });
-            },
-            all: filteredAndSorted.length,
-            slice: truncated.length,
-          ),
-        ],
-      ),
+  Widget _buildInnerTable(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildTable(context),
+        ShowMoreBar(
+          scrollController: _scrollController,
+          callBack: () {
+            setState(() {
+              slice = slice + 10;
+            });
+          },
+          all: filteredAndSorted.length,
+          slice: truncated.length,
+        ),
+      ],
     );
   }
 
-  Expanded _buildTable(BuildContext context) {
+  Widget _buildTable(BuildContext context) {
     return Expanded(
       child: LayoutBuilder(builder: (context, constraints) {
+        final tableWidth = max(constraints.maxWidth, 950.0);
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Container(
-            constraints:
-                BoxConstraints(maxWidth: max(constraints.maxWidth, 950)),
+          child: SizedBox(
+            width: tableWidth,
+            height: constraints.maxHeight,
             child: Column(
               children: [
                 _buildTableHeader(context),
@@ -310,12 +316,6 @@ class _LabworksTableState extends State<LabworksTable> {
               onPressed: () {
                 openLabworkPanel(null);
               }),
-    );
-  }
-
-  Expanded _buildSearch() {
-    return Expanded(
-      child: TopSearch(controller: searchController, setState: setState),
     );
   }
 

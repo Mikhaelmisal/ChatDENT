@@ -69,6 +69,10 @@ class _SyncTestRemote extends SaveRemote {
   Future<VersionedResult> getSince({int version = 0}) async => updates;
 
   @override
+  Future<Set<String>> listIds() async =>
+      updates.rows.map((r) => r.id).toSet();
+
+  @override
   Future<String> uploadImage({
     required String rowID,
     required String filename,

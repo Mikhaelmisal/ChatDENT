@@ -463,6 +463,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
   final birthdateFlyoutController = FlyoutController();
   final nameController = TextEditingController();
   final birthdateController = TextEditingController();
+  final ageController = TextEditingController();
   final addressController = TextEditingController();
   final notesController = TextEditingController();
 
@@ -473,6 +474,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
     emailTextController.text = widget.patient.email;
     nameController.text = widget.patient.title;
     birthdateController.text = _initialBirthdateText();
+    ageController.text = _initialAgeText();
     addressController.text = widget.patient.address;
     notesController.text = widget.patient.notes;
   }
@@ -489,6 +491,24 @@ class _PatientDetailsState extends State<_PatientDetails> {
     final defaultYear = DateTime.now().year - 18;
     if (widget.patient.birth == defaultYear) return '';
     return widget.patient.birth.toString();
+  }
+
+  String _initialAgeText() {
+    if (_initialBirthdateText().isEmpty) return '';
+    return widget.patient.age.toString();
+  }
+
+  void _syncAgeFromPatient() {
+    final next = widget.patient.age.toString();
+    if (ageController.text != next) ageController.text = next;
+  }
+
+  void _applyAgeInput(String value) {
+    final n = int.tryParse(value.trim());
+    if (n == null || n < 0 || n > 120) return;
+    widget.patient.birth = DateTime.now().year - n;
+    final year = widget.patient.birthYear.toString();
+    if (birthdateController.text != year) birthdateController.text = year;
   }
 
   void _applyIndiaPhone(String value) {
@@ -510,11 +530,13 @@ class _PatientDetailsState extends State<_PatientDetails> {
     final date = Patient.tryParseBirthDate(value);
     if (date != null) {
       widget.patient.setBirthFromDate(date);
+      _syncAgeFromPatient();
       return;
     }
     final year = Patient.tryParseBirthYear(value);
     if (year != null) {
       widget.patient.birth = year;
+      _syncAgeFromPatient();
     }
   }
 
@@ -533,6 +555,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
     if (selected == null || !mounted) return;
     widget.patient.setBirthFromDate(selected);
     birthdateController.text = widget.patient.birthDateString;
+    _syncAgeFromPatient();
     setState(() {});
   }
 
@@ -544,6 +567,7 @@ class _PatientDetailsState extends State<_PatientDetails> {
     birthdateFlyoutController.dispose();
     nameController.dispose();
     birthdateController.dispose();
+    ageController.dispose();
     addressController.dispose();
     notesController.dispose();
     super.dispose();
@@ -588,7 +612,38 @@ class _PatientDetailsState extends State<_PatientDetails> {
             onChanged: (value) => widget.patient.title = value,
           ),
         ),
-        Row(mainAxisSize: MainAxisSize.min, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          InfoLabel(
+            label: "${txt("age")}:",
+            isHeader: true,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 40,
+                child: CupertinoTextField(
+                  key: WK.fieldPatientYOB,
+                  placeholder: "—",
+                  textAlign: TextAlign.center,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+                  style: inputStyle.copyWith(fontSize: 13),
+                  placeholderStyle: hintStyle,
+                  decoration: fieldFill,
+                  keyboardType: TextInputType.number,
+                  controller: ageController,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  onChanged: (value) {
+                    _applyAgeInput(value);
+                    setState(() {});
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             flex: 2,
             child: InfoLabel(
@@ -596,24 +651,29 @@ class _PatientDetailsState extends State<_PatientDetails> {
               isHeader: true,
               child: FlyoutTarget(
                 controller: birthdateFlyoutController,
-                child: CupertinoTextField(
-                key: WK.fieldPatientYOB,
-                placeholder: "DD/MM/YYYY",
-                style: inputStyle,
-                placeholderStyle: hintStyle,
-                decoration: fieldFill,
-                keyboardType: TextInputType.number,
-                controller: birthdateController,
-                inputFormatters: [ddMmYyyyInputFormatter],
-                onChanged: _applyBirthdateInput,
-                suffix: Tooltip(
-                  message: txt("calendar"),
-                  child: IconButton(
-                    icon: const Icon(FluentIcons.calendar, size: 16),
-                    onPressed: _pickBirthDate,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoTextField(
+                        placeholder: "DD/MM/YYYY",
+                        style: inputStyle,
+                        placeholderStyle: hintStyle,
+                        decoration: fieldFill,
+                        keyboardType: TextInputType.number,
+                        controller: birthdateController,
+                        inputFormatters: [ddMmYyyyInputFormatter],
+                        onChanged: _applyBirthdateInput,
+                      ),
+                    ),
+                    Tooltip(
+                      message: txt("calendar"),
+                      child: IconButton(
+                        icon: const Icon(FluentIcons.calendar, size: 16),
+                        onPressed: _pickBirthDate,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
               ),
             ),
           ),
@@ -629,11 +689,19 @@ class _PatientDetailsState extends State<_PatientDetails> {
                 items: [
                   ComboBoxItem<int>(
                     value: 1,
-                    child: Txt("♂️ ${txt("male")}"),
+                    child: Txt(
+                      "♂️ ${txt("male")}",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   ComboBoxItem<int>(
                     value: 0,
-                    child: Txt("♀️ ${txt("female")}"),
+                    child: Txt(
+                      "♀️ ${txt("female")}",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   )
                 ],
                 value: widget.patient.gender,

@@ -4,6 +4,7 @@ flutter_launcher_icons:
   image_path: "assets/app_icon.png"
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "assets/app_icon_foreground.png"
+  adaptive_icon_foreground_inset: 16
 
   android: true
   image_path_android: "assets/app_icon_android.png"
@@ -21,7 +22,7 @@ flutter_launcher_icons:
 
   windows:
     image_path: "assets/app_icon_desktop.png"
-    generate: true
+    generate: false
     icon_size: 256
 
   macos:

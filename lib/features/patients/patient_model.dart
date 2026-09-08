@@ -344,8 +344,8 @@ class Patient extends Model {
       searchableString: age.toString(),
       sortable: true,
       tab: 0,
-      chipWidth: 70,
-      titleWidth: 32,
+      chipWidth: 48,
+      titleWidth: 28,
     ));
 
     // gender

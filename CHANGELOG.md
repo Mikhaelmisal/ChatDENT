@@ -1,7 +1,17 @@
+### ____0.10.5____
+
+- Dental Notes: after the tooth wheel, pick a ready-made finding/plan line (or Other) instead of typing.
+- Operative Details: sequential procedure steps per marked treatment (RCT and others); tap In progress to mark Completed.
+- Aligners sit under Ortho on the chart and in visit steps.
+- Sync: other devices drop rows permanently deleted on the web; deletes leave a tombstone so Windows/Chrome stay in sync.
+- Removed the Outreach nav screen. Birthday messages stay on n8n; reviews from the patient card; interested leads on the Leads list.
+- Medicine catalog moved to Settings (admin), next to prescription footer.
+- App icon: white speech bubble on Windows, Android, and Chrome.
+
 ### ____0.10.4____
 
 - Clinic hours: morning plus optional evening per weekday; appointment picker uses hour then slot length (default 20 minutes).
-- Leads: overlapping follow-up bookings allowed; call-outcome filter and new-lead toast; reschedule stage; invoices on the patient card; birthday outreach calendar.
+- Leads: overlapping follow-up bookings allowed; call-outcome filter and new-lead toast; reschedule stage; invoices on the patient card.
 - WhatsApp / n8n: booking token and Evolution key from env; welcome still sends in quiet hours; 3-minute AI cooldown; staff pause expires after 4 hours; clinic-local birthday 09:00; reminders skip quiet hours; flyer send no longer blocks AI events.
 
 ### ____0.10.3____

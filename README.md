@@ -157,8 +157,7 @@ docker compose restart pocketbase
 
 ## Everyday use
 
-- **Leads** — WhatsApp contacts, campaign messages, queue marketing images
-- **WhatsApp desk** — birthdays, reviews, reschedule, interested (staff call; the AI never books and never quotes fees)
+- **Leads** — WhatsApp contacts, campaign messages, queue marketing images (staff call to confirm interested leads; the AI never books and never quotes fees)
 - **Patients / Appointments / DICOM** — same clinic records as before
 
 Canned WhatsApp copy is only in **Settings → WhatsApp templates**. The AI only chats after the welcome template.

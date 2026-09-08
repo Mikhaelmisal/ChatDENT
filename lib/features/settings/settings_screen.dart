@@ -10,6 +10,7 @@ import 'package:chatdent/features/network_actions/network_actions_controller.dar
 import 'package:chatdent/features/leads/leads_store.dart';
 import 'package:chatdent/features/notes/notes_store.dart';
 import 'package:chatdent/features/patients/patients_store.dart';
+import 'package:chatdent/features/prescriptions/prescriptions_screen.dart';
 import 'package:chatdent/services/localization/locale.dart';
 import 'package:chatdent/features/settings/applies_to_indicator.dart';
 import 'package:chatdent/features/settings/services_settings/auth_settings.dart';
@@ -82,6 +83,7 @@ class SettingsScreen extends StatelessWidget {
               apply: (newVal) => globalSettings.set(
                   Setting.fromJson({"id": "prescriptionFot", "value": newVal})),
             ),
+          if (login.isAdmin) const PrescriptionsScreen(),
           if (login.isAdmin)
             SettingsItem(
               title: txt("phone"),

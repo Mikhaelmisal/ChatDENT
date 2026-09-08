@@ -279,7 +279,7 @@ class _LeadsPageState extends State<_LeadsPage> {
           controller: _scrollController,
           itemCount: _displayedItems.length,
           padding: const EdgeInsets.all(0),
-          itemExtent: 102,
+          itemExtent: 95,
           itemBuilder: (context, index) {
             final lead = _displayedItems[index];
             return _buildRow(
@@ -329,11 +329,9 @@ class _LeadsPageState extends State<_LeadsPage> {
         constraints: constraints,
         calculatedWidth: calculatedWidth,
         searchStringLowerCased: searchStringLowerCased,
-        canEdit: _canEdit,
-        onChanged: () => setState(() {}),
       ),
       contentPadding:
-          const EdgeInsetsDirectional.only(top: 0, bottom: 5, start: 5, end: 8),
+          const EdgeInsetsDirectional.only(top: 0, bottom: 5, start: 5, end: 0),
     );
   }
 
@@ -490,16 +488,12 @@ class _LeadTileBody extends StatelessWidget {
     required this.constraints,
     required this.calculatedWidth,
     required this.searchStringLowerCased,
-    required this.canEdit,
-    required this.onChanged,
   });
 
   final Lead lead;
   final BoxConstraints constraints;
   final double calculatedWidth;
   final String searchStringLowerCased;
-  final bool canEdit;
-  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -516,66 +510,10 @@ class _LeadTileBody extends StatelessWidget {
                 Row(
                   children: [
                     ItemTitle(item: lead),
-                    Expanded(
-                      child: Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: Padding(
-                          padding:
-                              const EdgeInsetsDirectional.only(end: 8),
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              _leadOutcomePill(
-                                CallOutcome.label(lead.callOutcome),
-                                CallOutcome.color(lead.callOutcome),
-                                filled: lead.callOutcome.isNotEmpty,
-                              ),
-                              _leadOutcomePill(
-                                lead.stageLabel,
-                                lead.stageColor,
-                                filled: false,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    _buildStagePills(),
                   ],
                 ),
                 _buildBottomLabels(context),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {},
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  checked: lead.called,
-                  onChanged: canEdit
-                      ? (v) {
-                          lead.markCalled(v ?? false);
-                          leads.set(lead);
-                          onChanged();
-                        }
-                      : null,
-                  content: Txt(txt('leadCalled')),
-                ),
-                Checkbox(
-                  checked: lead.isComing,
-                  onChanged: canEdit && lead.called
-                      ? (v) {
-                          lead.markComing(v ?? false);
-                          leads.set(lead);
-                          onChanged();
-                        }
-                      : null,
-                  content: Txt(txt('coming')),
-                ),
               ],
             ),
           ),
@@ -584,11 +522,40 @@ class _LeadTileBody extends StatelessWidget {
     );
   }
 
+  Widget _buildStagePills() {
+    return GestureDetector(
+      onTap: () => openLead(lead),
+      child: SizedBox(
+        width: (constraints.maxWidth - 255).clamp(72.0, 400.0),
+        height: 30,
+        child: SingleChildScrollView(
+          reverse: true,
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _leadOutcomePill(
+                CallOutcome.label(lead.callOutcome),
+                CallOutcome.color(lead.callOutcome),
+                filled: lead.callOutcome.isNotEmpty,
+              ),
+              const SizedBox(width: 6),
+              _leadOutcomePill(
+                lead.stageLabel,
+                lead.stageColor,
+                filled: false,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomLabels(BuildContext context) {
     final labelsList = lead.tableLabels;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 5),
-      width: constraints.maxWidth - 220,
+      width: (constraints.maxWidth - 52).clamp(120.0, 2000.0),
       height: 48,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,

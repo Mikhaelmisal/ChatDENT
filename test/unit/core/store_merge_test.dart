@@ -14,9 +14,15 @@ class _MergeSyncRemote extends SaveRemote {
   final VersionedResult remoteUpdates;
   final int remoteVersion;
   final pushed = <RowToWriteRemotely>[];
+  Set<String> presentIds;
 
-  _MergeSyncRemote({required this.remoteUpdates, required this.remoteVersion})
-      : super(
+  _MergeSyncRemote({
+    required this.remoteUpdates,
+    required this.remoteVersion,
+    Set<String>? presentIds,
+  })  : presentIds = presentIds ??
+            remoteUpdates.rows.map((r) => r.id).toSet(),
+        super(
           storeName: 'merge-test',
           pbInstance: PocketBase('http://fake-pocketbase'),
         );
@@ -31,6 +37,9 @@ class _MergeSyncRemote extends SaveRemote {
 
   @override
   Future<VersionedResult> getSince({int version = 0}) async => remoteUpdates;
+
+  @override
+  Future<Set<String>> listIds() async => presentIds;
 
   @override
   Future<bool> put(List<RowToWriteRemotely> data) async {
@@ -435,6 +444,33 @@ void main() {
       expect(result.exception, isNull);
       expect(merged['imgs'], ['photo.jpg']);
       expect(merged['dcmImgs'], ['scan.dcm']);
+    });
+
+    test('drops local rows that were permanently deleted on the server',
+        () async {
+      const keepId = 'keep-1';
+      const goneId = 'gone-1';
+      await local.put({
+        keepId: '{"id":"keep-1","name":"still here"}',
+        goneId: '{"id":"gone-1","name":"deleted on web"}',
+      });
+      await local.putVersion(5);
+      await local.putDeferred({});
+      remote = _MergeSyncRemote(
+        remoteVersion: 5,
+        remoteUpdates: VersionedResult(5, const []),
+        presentIds: {keepId},
+      );
+      store = _MergeSyncStore(local: local, remote: remote);
+      await store.loaded;
+
+      final result = await store.debugSyncTry();
+
+      expect(result.exception, isNull);
+      expect(result.pulled, 1);
+      expect(await local.get(keepId), contains('still here'));
+      expect(await local.get(goneId), isEmpty);
+      expect(store.get(goneId), isNull);
     });
   });
 

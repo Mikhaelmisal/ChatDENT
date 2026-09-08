@@ -105,6 +105,26 @@ void main() {
       );
     });
 
+    test('clearAll removes added notifications', () {
+      staticNotifications.addNotification(
+        StaticNotification(
+          icon: FluentIcons.info,
+          title: 'Clear me',
+          body: 'Body',
+          actions: [],
+        ),
+      );
+      expect(
+        staticNotifications.notifications.any((n) => n.title == 'Clear me'),
+        isTrue,
+      );
+      staticNotifications.clearAll();
+      expect(
+        staticNotifications.notifications.any((n) => n.title == 'Clear me'),
+        isFalse,
+      );
+    });
+
     test('notifications is a list of StaticNotification', () {
       expect(
         staticNotifications.notifications,

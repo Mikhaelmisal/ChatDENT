@@ -565,7 +565,7 @@ class ClickableBottomLabel extends StatelessWidget {
                         .map((e) => ParsedPhoneNumber(e))
                         .toList(),
                     key: phoneButtonKey)
-              else
+              else if (label.title != txt("age"))
                 IconButton(
                   icon: Icon(label.icon,
                       color: label.color == null ? null : Colors.white),

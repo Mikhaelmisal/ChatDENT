@@ -31,6 +31,19 @@ dynamic decodeStoredJsonField(String raw) {
   return decoded;
 }
 
+@visibleForTesting
+bool jsonMarksDeleted(dynamic decoded) {
+  return decoded is Map && decoded['deleted'] == true;
+}
+
+/// JSON body written when a row is permanently deleted, so other devices
+/// receive the removal through [SaveRemote.getSince].
+@visibleForTesting
+Map<String, dynamic> deletionTombstone(String id) => {
+      'id': id,
+      'deleted': true,
+    };
+
 class RowToWriteRemotely {
   String id;
   String data;
@@ -173,12 +186,47 @@ class SaveRemote {
       if (result.items.isEmpty) {
         return 0;
       }
-      return DateTime.parse(result.items.first.get<String>("updated"))
-          .millisecondsSinceEpoch;
+    return DateTime.parse(result.items.first.get<String>("updated"))
+        .millisecondsSinceEpoch;
     } catch (e) {
       await checkOnline();
       throw Exception(e);
     }
+  }
+
+  /// All record ids currently in this store on PocketBase.
+  /// Used to drop local copies of rows that were permanently deleted elsewhere.
+  Future<Set<String>> listIds() async {
+    final ids = <String>{};
+    bool nextPageExists = true;
+    int currentPage = 1;
+    do {
+      try {
+        final pageResult = await remoteRows.getList(
+          filter: 'store="$storeName"',
+          sort: "id",
+          perPage: 900,
+          page: currentPage,
+          fields: "id,data",
+        );
+        for (final item in pageResult.items) {
+          final raw = item.data["data"];
+          if (jsonMarksDeleted(raw is String ? decodeStoredJsonField(raw) : raw)) {
+            continue;
+          }
+          ids.add(item.id);
+        }
+        if (pageResult.totalPages > currentPage) {
+          currentPage++;
+        } else {
+          nextPageExists = false;
+        }
+      } catch (e) {
+        await checkOnline();
+        rethrow;
+      }
+    } while (nextPageExists);
+    return ids;
   }
 
   Future<bool> put(List<RowToWriteRemotely> data) async {

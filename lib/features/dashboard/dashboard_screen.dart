@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:chatdent/app/chatdent_theme.dart';
 import 'package:chatdent/app/routes.dart';
 import 'package:chatdent/common_widgets/current_account.dart';
@@ -471,12 +473,13 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildTopSquares(BuildContext context) {
     final p = ChatDentPalette.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(15, 16, 15, 20),
-      child: Row(
-        children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 710;
+        final tiles = <Widget>[
           if (login.perm(Perm.appointments).some)
             dashboardSquare(
+              compact: compact,
               background: p.purpleAccent,
               shadowColor: const Color(0xFF800080),
               iconColor: p.purpleIcon,
@@ -488,6 +491,7 @@ class DashboardScreen extends StatelessWidget {
             ),
           if (login.perm(Perm.patients).some)
             dashboardSquare(
+              compact: compact,
               background: p.blueAccent,
               shadowColor: const Color(0xFF0078D4),
               iconColor: p.blueIcon,
@@ -499,6 +503,7 @@ class DashboardScreen extends StatelessWidget {
             ),
           if (login.perm(Perm.revenue).read)
             dashboardSquare(
+              compact: compact,
               background: p.tealAccent,
               shadowColor: const Color(0xFF008080),
               iconColor: p.tealIcon,
@@ -512,6 +517,7 @@ class DashboardScreen extends StatelessWidget {
             ),
           if (login.perm(Perm.leads).some || login.isAdmin)
             dashboardSquare(
+              compact: compact,
               background: p.amberAccent,
               shadowColor: const Color(0xFFEA580C),
               iconColor: p.amberIcon,
@@ -521,8 +527,33 @@ class DashboardScreen extends StatelessWidget {
               title: dashboardCtrl.newLeadsToday.length.toString(),
               subtitle: txt("newLeadsToday"),
             ),
-        ],
-      ),
+        ];
+        if (tiles.isEmpty) return const SizedBox.shrink();
+
+        Widget rowOf(List<Widget> cells) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cells.length; i++) ...[
+                Expanded(child: cells[i]),
+              ],
+              if (cells.length == 1) const Expanded(child: SizedBox()),
+            ],
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(compact ? 8 : 15, 12, compact ? 8 : 15, 12),
+          child: compact
+              ? Column(
+                  children: [
+                    for (var i = 0; i < tiles.length; i += 2)
+                      rowOf(tiles.sublist(i, min(i + 2, tiles.length))),
+                  ],
+                )
+              : rowOf(tiles),
+        );
+      },
     );
   }
 
@@ -536,27 +567,28 @@ class DashboardScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     bool isMoney = false,
+    bool compact = false,
   }) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
-        child: Container(
-          height: 90,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(5),
-            boxShadow: chatDentStatShadow(shadowColor),
-          ),
-        padding: const EdgeInsets.all(8),
+    final iconSize = compact ? 22.0 : 32.0;
+    final valueSize = compact ? 22.0 : 28.0;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 4 : 8, compact ? 6 : 10, compact ? 4 : 8, compact ? 6 : 16),
+      child: Container(
+        height: compact ? 88 : 90,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(5),
+          boxShadow: chatDentStatShadow(shadowColor),
+        ),
+        padding: EdgeInsets.all(compact ? 8 : 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(width: 8),
-            Icon(icon, color: iconColor, size: 32),
+            Icon(icon, color: iconColor, size: iconSize),
             Container(
               width: 1,
-              height: 40,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
+              height: compact ? 36 : 40,
+              margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
               color: iconColor.withValues(alpha: 0.3),
             ),
             Expanded(
@@ -571,7 +603,7 @@ class DashboardScreen extends StatelessWidget {
                         ? MoneyDisplay(
                             title,
                             style: TextStyle(
-                              fontSize: 28,
+                              fontSize: valueSize,
                               fontWeight: FontWeight.bold,
                               height: 1.1,
                               color: valueColor,
@@ -581,7 +613,7 @@ class DashboardScreen extends StatelessWidget {
                             title,
                             maxLines: 1,
                             style: TextStyle(
-                              fontSize: 28,
+                              fontSize: valueSize,
                               fontWeight: FontWeight.bold,
                               height: 1.1,
                               color: valueColor,
@@ -591,13 +623,14 @@ class DashboardScreen extends StatelessWidget {
                   const SizedBox(height: 2),
                   Txt(
                     subtitle,
-                    maxLines: 1,
+                    maxLines: compact ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: compact ? 11 : 13,
                       color: labelColor,
                       fontStyle: FontStyle.italic,
-                      letterSpacing: 0.6,
+                      letterSpacing: compact ? 0.2 : 0.6,
+                      height: 1.15,
                     ),
                   ),
                 ],
@@ -606,7 +639,6 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-    ),
     );
   }
 }
