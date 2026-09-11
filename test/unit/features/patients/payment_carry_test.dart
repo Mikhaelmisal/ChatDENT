@@ -38,6 +38,13 @@ void main() {
       );
     });
 
+    test('card through second visit is still underpaid after a partial payment',
+        () {
+      final first = testAppointment(id: 'a1', price: 3000, paid: 0);
+      final second = testAppointment(id: 'a2', price: 0, paid: 1000);
+      expect(Patient.runningBalanceOf([first, second]), -2000);
+    });
+
     test('installment on visit two reduces what is still due', () {
       final first = testAppointment(id: 'a1', price: 10000, paid: 3000);
       final second = testAppointment(id: 'a2', price: 0, paid: 3000);

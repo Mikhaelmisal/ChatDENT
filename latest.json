@@ -1,7 +1,7 @@
 {
   "latest_version": "0.10.6",
   "changelog": [
-    "Operative Details continue unfinished steps on the next visit. Underpaid and overpaid amounts carry across appointments."
+    "Operative Details continue unfinished steps. Under/overpaid carry across visits; appointment cards show the running balance."
   ],
   "downloads": {
     "windows": "https://github.com/Mikhaelmisal/ChatDENT/releases/download/0.10.6/ChatDENT-clinic-pc-0.10.6.zip",

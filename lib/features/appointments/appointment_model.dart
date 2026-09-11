@@ -82,6 +82,25 @@ class Appointment extends Model {
     return (paid - price).abs();
   }
 
+  /// Paid minus billed through this visit (earlier visits included).
+  /// Positive = overpaid, negative = still due.
+  double get runningBalanceThroughThisVisit {
+    final all = patient?.allAppointments ?? const <Appointment>[];
+    final through = <Appointment>[];
+    var found = false;
+    for (final a in all) {
+      through.add(a);
+      if (a.id == id) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      through.add(this);
+    }
+    return Patient.runningBalanceOf(through);
+  }
+
   bool get isMissed {
     return date.isBefore(DateTime.now()) &&
         date.difference(DateTime.now()).inDays.abs() > 0 &&

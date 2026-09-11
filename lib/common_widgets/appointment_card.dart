@@ -378,7 +378,8 @@ class AppointmentCard extends StatelessWidget {
   }
 
   Column _paymentPills(BuildContext context) {
-    final bgColor = colorBasedOnPayments(appointment.paid, appointment.price);
+    final running = appointment.runningBalanceThroughThisVisit;
+    final bgColor = colorBasedOnPayments(running, 0);
     final txtColor =
         bgColor ?? FluentTheme.of(context).iconTheme.color ?? Colors.grey;
     return Column(
@@ -402,10 +403,10 @@ class AppointmentCard extends StatelessWidget {
             ),
           ],
         ),
-        if (appointment.paid != appointment.price)
+        if (running.abs() >= 0.005)
           PaymentPill(
-            title: appointment.overPaid ? txt("overpaid") : txt("underpaid"),
-            amount: appointment.paymentDifference.toStringAsFixed(2),
+            title: running > 0 ? txt("overpaid") : txt("underpaid"),
+            amount: running.abs().toStringAsFixed(2),
             color: bgColor?.withAlpha(50),
             finalTextColor: txtColor,
           )

@@ -2,7 +2,7 @@
 
 - Operative Details: unfinished procedure steps on a tooth continue on the next appointment instead of starting over.
 - Dental Notes: updated caries extra-note wording.
-- Payments: underpaid and overpaid amounts carry to the next visit (installments).
+- Payments: underpaid and overpaid amounts carry to the next visit (installments). Appointment cards show the running balance through that visit.
 
 ### ____0.10.5____
 
