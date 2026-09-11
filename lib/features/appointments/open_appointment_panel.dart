@@ -623,20 +623,17 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
   Widget build(BuildContext context) {
     double paymentDifference = 0;
     Patient? patient = widget.appointment.patient;
+    final priorBalance = patient?.runningBalance(
+          excludingAppointmentId: widget.appointment.id,
+        ) ??
+        0;
     if (patient != null) {
-      final paymentsMade = patient.doneAppointments
-          .where((a) => a.id != widget.appointment.id)
-          .fold(0.0, (value, element) => value + element.paid);
-
-      final pricesGiven = patient.doneAppointments
-          .where((a) => a.id != widget.appointment.id)
-          .fold(0.0, (value, element) => value + element.price);
-
-      paymentDifference = pricesGiven +
-          widget.appointment.price -
-          paymentsMade -
-          widget.appointment.paid;
+      paymentDifference = widget.appointment.price -
+          widget.appointment.paid -
+          priorBalance;
     }
+    final credit = priorBalance > 0 ? priorBalance : 0.0;
+    final outstanding = priorBalance < 0 ? -priorBalance : 0.0;
     final fieldFill = chatDentFieldFill(ChatDentPalette.of(context));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,19 +738,28 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
           ],
         ),
         const Divider(direction: Axis.horizontal),
-        if ((widget.appointment.patient?.creditBalance(
-                    excludingAppointmentId: widget.appointment.id) ??
-                0) >
-            0)
+        if (credit > 0)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: InfoBar(
               isLong: true,
               title: Txt(
-                '${txt("creditBalance")}: ${(widget.appointment.patient!.creditBalance(excludingAppointmentId: widget.appointment.id)).toStringAsFixed(2)} ${currency()}',
+                '${txt("creditBalance")}: ${credit.toStringAsFixed(2)} ${currency()}',
               ),
               content: Txt(txt("creditAppliedNextHint")),
               severity: InfoBarSeverity.success,
+            ),
+          ),
+        if (outstanding > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InfoBar(
+              isLong: true,
+              title: Txt(
+                '${txt("outstandingBalance")}: ${outstanding.toStringAsFixed(2)} ${currency()}',
+              ),
+              content: Txt(txt("outstandingAppliedNextHint")),
+              severity: InfoBarSeverity.warning,
             ),
           ),
         Row(
@@ -769,12 +775,7 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
                     setState(() {
                       widget.appointment.price = moneyInputFormatter.parse(v);
                       if (didNotEditPaidYet) {
-                        final credit = widget.appointment.patient
-                                ?.creditBalance(
-                                    excludingAppointmentId:
-                                        widget.appointment.id) ??
-                            0;
-                        final due = widget.appointment.price - credit;
+                        final due = widget.appointment.price - priorBalance;
                         widget.appointment.paid = due > 0 ? due : 0;
                         paidController.text = moneyInputFormatter
                             .formatDouble(widget.appointment.paid);

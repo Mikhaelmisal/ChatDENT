@@ -1132,6 +1132,9 @@ class Es implements En {
     "creditApplied": "Crédito aplicado",
     "creditAppliedNextHint":
         "El extra se descuenta del siguiente tratamiento. Lo pagado hoy es solo lo que aún se debe.",
+    "outstandingBalance": "Still due from earlier visits",
+    "outstandingAppliedNextHint":
+        "Earlier visits were not paid in full. That amount is added here. Paid is filled with the total still due; lower it if they only pay an installment today.",
     "amountDue": "Importe a pagar",
     "invoiceBalance": "Saldo",
     "printInvoice": "Imprimir factura",

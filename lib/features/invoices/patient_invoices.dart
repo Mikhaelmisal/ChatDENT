@@ -39,6 +39,7 @@ class PatientInvoices extends StatelessWidget {
             .where((a) => invoices.forAppointment(a.id) == null)
             .toList();
         final credit = patient.creditBalance();
+        final outstanding = patient.outstandingBalance();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -52,6 +53,18 @@ class PatientInvoices extends StatelessWidget {
                   ),
                   content: Txt(txt("creditAppliedNextHint")),
                   severity: InfoBarSeverity.success,
+                ),
+              ),
+            if (outstanding > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: InfoBar(
+                  isLong: true,
+                  title: Txt(
+                    '${txt("outstandingBalance")}: ${outstanding.toStringAsFixed(2)} ${currency()}',
+                  ),
+                  content: Txt(txt("outstandingAppliedNextHint")),
+                  severity: InfoBarSeverity.warning,
                 ),
               ),
             if (missing.isNotEmpty)

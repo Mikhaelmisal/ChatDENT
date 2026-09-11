@@ -1132,6 +1132,9 @@ class El implements En {
     "creditApplied": "Πίστωση",
     "creditAppliedNextHint":
         "Το επιπλέον ποσό αφαιρείται από την επόμενη θεραπεία. Σήμερα πληρώνεται μόνο το υπόλοιπο.",
+    "outstandingBalance": "Still due from earlier visits",
+    "outstandingAppliedNextHint":
+        "Earlier visits were not paid in full. That amount is added here. Paid is filled with the total still due; lower it if they only pay an installment today.",
     "amountDue": "Οφειλόμενο",
     "invoiceBalance": "Υπόλοιπο",
     "printInvoice": "Εκτύπωση τιμολογίου",

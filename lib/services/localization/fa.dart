@@ -1111,6 +1111,9 @@ class Fa implements En {
     "creditApplied": "اعتبار اعمال‌شده",
     "creditAppliedNextHint":
         "مبلغ اضافه از درمان بعدی کم می‌شود. پرداخت امروز فقط مانده است.",
+    "outstandingBalance": "Still due from earlier visits",
+    "outstandingAppliedNextHint":
+        "Earlier visits were not paid in full. That amount is added here. Paid is filled with the total still due; lower it if they only pay an installment today.",
     "amountDue": "مبلغ قابل پرداخت",
     "invoiceBalance": "مانده",
     "printInvoice": "چاپ فاکتور",

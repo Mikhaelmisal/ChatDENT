@@ -221,17 +221,38 @@ class Patient extends Model {
     return pricesGiven - paymentsMade;
   }
 
-  /// Extra paid on other visits. Applied to the next treatment’s amount due.
-  double creditBalance({String? excludingAppointmentId}) {
+  /// Paid minus billed on other visits. Positive = credit; negative = still due.
+  static double runningBalanceOf(
+    Iterable<Appointment> appointments, {
+    String? excludingAppointmentId,
+  }) {
     double paid = 0;
     double prices = 0;
-    for (final a in allAppointments) {
+    for (final a in appointments) {
       if (a.id == excludingAppointmentId) continue;
       paid += a.paid;
       prices += a.price;
     }
-    final extra = paid - prices;
+    return paid - prices;
+  }
+
+  double runningBalance({String? excludingAppointmentId}) {
+    return runningBalanceOf(
+      allAppointments,
+      excludingAppointmentId: excludingAppointmentId,
+    );
+  }
+
+  /// Extra paid on other visits. Applied to the next treatment’s amount due.
+  double creditBalance({String? excludingAppointmentId}) {
+    final extra = runningBalance(excludingAppointmentId: excludingAppointmentId);
     return extra > 0 ? extra : 0;
+  }
+
+  /// Still due from other visits (installments). Added to the next treatment.
+  double outstandingBalance({String? excludingAppointmentId}) {
+    final extra = runningBalance(excludingAppointmentId: excludingAppointmentId);
+    return extra < 0 ? -extra : 0;
   }
 
   int? get daysSinceLastAppointment {

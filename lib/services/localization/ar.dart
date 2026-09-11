@@ -1105,6 +1105,9 @@ class Ar implements En {
     "creditApplied": "الرصيد المستخدم",
     "creditAppliedNextHint":
         "يُخصم هذا المبلغ الزائد من العلاج التالي. المدفوع اليوم هو المتبقي فقط.",
+    "outstandingBalance": "Still due from earlier visits",
+    "outstandingAppliedNextHint":
+        "Earlier visits were not paid in full. That amount is added here. Paid is filled with the total still due; lower it if they only pay an installment today.",
     "amountDue": "المبلغ المستحق",
     "invoiceBalance": "الرصيد",
     "printInvoice": "طباعة الفاتورة",

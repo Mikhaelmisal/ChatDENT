@@ -1115,11 +1115,14 @@ class En {
     "generateInvoices": "Generate missing invoices",
     "noInvoicesYet": "No billed visits for this patient yet",
     "patientInvoicesInfo":
-        "Invoices are generated from visit price and payment. Extra paid is kept as credit and deducted from the next treatment.",
+        "Invoices are generated from visit price and payment. Extra paid is kept as credit; unpaid installments stay due and both carry to the next visit.",
     "creditBalance": "Account credit",
     "creditApplied": "Credit applied",
     "creditAppliedNextHint":
         "This extra amount is deducted from the next treatment. Paid today is only what is still due.",
+    "outstandingBalance": "Still due from earlier visits",
+    "outstandingAppliedNextHint":
+        "Earlier visits were not paid in full. That amount is added here. Paid is filled with the total still due; lower it if they only pay an installment today.",
     "amountDue": "Amount due",
     "invoiceBalance": "Balance",
     "printInvoice": "Print invoice",
