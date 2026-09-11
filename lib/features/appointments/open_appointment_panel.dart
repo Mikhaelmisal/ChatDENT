@@ -38,6 +38,7 @@ import 'package:chatdent/common_widgets/operators_picker.dart';
 import 'package:chatdent/common_widgets/patient_picker.dart';
 import 'package:chatdent/features/appointments/appointment_model.dart';
 import 'package:chatdent/features/appointments/appointments_store.dart';
+import 'package:chatdent/features/appointments/appointment_procedure_carry.dart';
 import 'package:chatdent/features/appointments/procedure_protocols.dart';
 import 'package:chatdent/features/appointments/procedure_steps_tracker.dart';
 import 'package:chatdent/features/settings/settings_stores.dart';
@@ -599,10 +600,7 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
     super.initState();
     _fillControllers();
     if (widget.appointment.paid != 0) didNotEditPaidYet = false;
-    syncAppointmentProcedureProgress(
-      widget.appointment.teeth,
-      widget.appointment.procedureProgress,
-    );
+    continueOpenProceduresFromPriorVisits(widget.appointment);
     transcriptionEditCounter.observe(_updateWhenTranscriptionOccurs);
   }
 
@@ -662,15 +660,20 @@ class _OperativeDetailsState extends State<_OperativeDetails> {
                       setState(() {
                         if (y != null) {
                           widget.appointment.teeth[x] = y;
+                          syncAppointmentProcedureProgress(
+                            widget.appointment.teeth,
+                            widget.appointment.procedureProgress,
+                          );
+                          seedProcedureFromPriorVisits(widget.appointment, x);
                         } else {
                           widget.appointment.teeth.remove(x);
                           widget.appointment.teethExtraNotes.remove(x);
                           widget.appointment.procedureProgress.remove(x);
+                          syncAppointmentProcedureProgress(
+                            widget.appointment.teeth,
+                            widget.appointment.procedureProgress,
+                          );
                         }
-                        syncAppointmentProcedureProgress(
-                          widget.appointment.teeth,
-                          widget.appointment.procedureProgress,
-                        );
                       });
                     },
                     onExtraNote: (x, extra) {

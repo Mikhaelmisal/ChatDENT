@@ -10,15 +10,16 @@ const Map<String, List<String>> txExtraNoteChoices = {
   'caries': [
     'Occlusal caries. Restoration advised.',
     'Proximal caries. Restoration advised.',
-    'Cervical / root caries. Restoration advised.',
+    'Cervical / root caries. Restoration / Extraction advised.',
     'Deep caries. Pulp assessment / RCT advised.',
-    'Recurrent caries under existing restoration.',
+    'Recurrent caries Pulp assessment / RCT advised.',
   ],
   'fractured': [
     'Enamel fracture. Restoration advised.',
-    'Crown fracture involving dentine. Restoration advised.',
+    'Crown fracture involving dentin. Restoration advised.',
     'Fracture involving pulp. RCT / extraction advised.',
     'Root fracture. Extraction / surgical assessment advised.',
+    'Avulsed tooth. Splinting advised.',
   ],
   'mobility': [
     'Grade I mobility. Periodontal review advised.',
@@ -28,17 +29,16 @@ const Map<String, List<String>> txExtraNoteChoices = {
   'recession': [
     'Gingival recession noted. Oral hygiene reinforced.',
     'Recession with sensitivity. Desensitising / graft discussed.',
-    'Recession with bone loss. Periodontal treatment advised.',
+    'Recession with bone loss. OPG advised & Periodontal review.',
   ],
   'rroot': [
-    'Retained root. Extraction advised.',
-    'Retained root. Surgical removal advised.',
-    'Retained root. Monitor if asymptomatic.',
+    'OverRetained root. Extraction advised.',
+    'OverRetained root. Surgical removal advised.',
+    'OverRetained root. Monitor if asymptomatic.',
   ],
   'rprimary': [
     'Retained primary tooth. Extraction advised.',
     'Retained primary tooth. Monitor eruption of successor.',
-    'Ankylosed primary tooth. Surgical removal advised.',
   ],
   'malposition': [
     'Rotated / malpositioned. Orthodontic evaluation advised.',
@@ -48,13 +48,15 @@ const Map<String, List<String>> txExtraNoteChoices = {
   'ortho': [
     'Aligners advised.',
     'Aligners in treatment.',
-    'Fixed appliance (braces) advised.',
+    'Braces advised.',
     'Orthodontic treatment in progress.',
+    'Appliance advised.',
     'Retainers advised / in retention.',
   ],
   'impacted': [
     'Impacted. Surgical assessment advised.',
-    'Impacted with pain / pericoronitis. Removal advised.',
+    'Impacted with pain. Removal advised.',
+    'Pericoronitis seen. Operculectomy advised.',
     'Impacted. Monitor if asymptomatic.',
   ],
   'filling': [
@@ -69,6 +71,7 @@ const Map<String, List<String>> txExtraNoteChoices = {
   ],
   'implant': [
     'Implant present. Monitor.',
+    'Re-implant surgery advised.',
     'Implant indicated. Planning / CBCT advised.',
     'Implant with issues. Review advised.',
   ],
@@ -94,7 +97,6 @@ const Map<String, List<String>> txExtraNoteChoices = {
   ],
   'abutment': [
     'Bridge abutment. Monitor.',
-    'Abutment needs crown / review.',
   ],
   'pontic': [
     'Bridge pontic. Monitor.',

@@ -1,3 +1,8 @@
+### ____0.10.6____
+
+- Operative Details: unfinished procedure steps on a tooth continue on the next appointment instead of starting over.
+- Dental Notes: updated caries extra-note wording.
+
 ### ____0.10.5____
 
 - Dental Notes: after the tooth wheel, pick a ready-made finding/plan line (or Other) instead of typing.
@@ -7,6 +12,7 @@
 - Removed the Outreach nav screen. Birthday messages stay on n8n; reviews from the patient card; interested leads on the Leads list.
 - Medicine catalog moved to Settings (admin), next to prescription footer.
 - App icon: white speech bubble on Windows, Android, and Chrome.
+- Windows and Android: in-app notice when a newer pack is published in latest.json (download link, not silent install). Web still updates when you replace the hosted files.
 
 ### ____0.10.4____
 
